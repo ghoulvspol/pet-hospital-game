@@ -317,7 +317,8 @@ h1 {
 }
 
 .pressure-card,
-.arrival-card {
+.arrival-card,
+.progress-card {
   position: relative;
   overflow: hidden;
   padding: 9px 10px 12px;
@@ -327,7 +328,8 @@ h1 {
 }
 
 .pressure-card span,
-.arrival-card span {
+.arrival-card span,
+.progress-card span {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -335,15 +337,77 @@ h1 {
 }
 
 .pressure-card strong,
-.arrival-card strong {
+.arrival-card strong,
+.progress-card strong {
   font-size: 12px;
 }
 
 .pressure-card small,
-.arrival-card small {
+.arrival-card small,
+.progress-card small {
   color: var(--muted);
   font-size: 11px;
   font-weight: 900;
+}
+
+.progress-card {
+  display: grid;
+  gap: 8px;
+}
+
+.progress-card > b {
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+
+.progress-card .mini-button {
+  padding: 6px 8px;
+}
+
+.save-score-button {
+  width: 100%;
+}
+
+.difficulty-buttons {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.difficulty-buttons .mini-button {
+  width: 100%;
+}
+
+.leaderboard-card {
+  gap: 7px;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 7px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.leaderboard-row.current {
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.leaderboard-row span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.leaderboard-row small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .pressure-card > i,

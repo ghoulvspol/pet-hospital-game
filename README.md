@@ -12,6 +12,8 @@ PetCare Tycoon is an original bilingual pet hospital management game prototype b
 
 - Bilingual UI: Chinese and English switching from the top bar.
 - Management loop: build rooms, hire staff, assign work, treat pets, earn cash, and expand capacity.
+- Local player profile, score saving, and leaderboard tracking through browser storage.
+- Difficulty modes: Cozy, Classic, and Expert adjust starting money, arrivals, patience, upkeep, pressure, and score multipliers.
 - Room systems: exam, treatment, pharmacy, and grooming rooms with upgrades to level 3.
 - Staff progression: staff gain XP, level up, earn skill points, and unlock useful care skills.
 - Live simulation: pet arrivals, queues, cleanliness, fatigue, warnings, daily reports, and economy pressure.
@@ -73,6 +75,8 @@ npm run preview
 - Press `Space` to pause or resume.
 - Press `1`, `2`, `3`, `4` to choose room types.
 - Use `中文` / `English` in the top bar to switch language.
+- Use the left player card to rename the local profile, save the current score, and manage the local leaderboard.
+- Choose Cozy, Classic, or Expert difficulty from the left panel; changing difficulty starts a fresh run with new pressure and scoring rules.
 - Restart from the HUD when you want to begin a fresh run.
 
 ## Gameplay Guide
@@ -105,7 +109,7 @@ npm run test:performance
 What the checks cover:
 
 - `test:actions` audits HUD `data-action` handlers against real-click coverage.
-- `test:clicks` runs real Chrome click flows for room building, room inspection, staff assignment, pause, restart, and upgrades.
+- `test:clicks` runs real Chrome click flows for room building, room inspection, staff assignment, player rename, difficulty selection, score saving, leaderboard clearing, pause, restart, and upgrades.
 - `test:responsive` verifies mobile and tablet layouts, scrolling, overflow, and key controls.
 - `test:long-run` advances multiple in-game days and checks reports and economy behavior.
 - `test:stress` validates debt, dirty rooms, lost pets, tired staff, and warning states.

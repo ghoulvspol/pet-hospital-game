@@ -1,4 +1,4 @@
-import type { CarePolicy, HospitalObjective, IllnessDefinition, Locale, PatientPriority, PatientStatus, PetKind, RoomDefinition, RoomKind, SkillId, StaffRole, TreatmentGrade } from '../game/simulation/types';
+import type { CarePolicy, HospitalObjective, IllnessDefinition, Locale, DifficultyId, PatientPriority, PatientStatus, PetKind, RoomDefinition, RoomKind, SkillId, StaffRole, TreatmentGrade } from '../game/simulation/types';
 
 export const DEFAULT_LOCALE: Locale = 'en';
 
@@ -34,6 +34,9 @@ export interface TranslationBundle {
     soothePatient: string;
     prioritizePatient: string;
     upgradeComfort: string;
+    saveScore: string;
+    clearLeaderboard: string;
+    renamePlayer: string;
   };
   disabledReasons: {
     notEnoughMoney: (amount: number) => string;
@@ -126,6 +129,14 @@ export interface TranslationBundle {
     coachBuild: (room: string) => string;
     coachUpgrade: string;
     coachHire: string;
+    player: string;
+    score: string;
+    bestScore: string;
+    leaderboard: string;
+    difficulty: string;
+    runs: string;
+    rank: string;
+    noScores: string;
   };
   tutorial: {
     title: string;
@@ -187,6 +198,11 @@ export interface TranslationBundle {
     waitingComfortMaxed: string;
     careStreak: (streak: number, bonus: number) => string;
     objectiveWaveUnlocked: (wave: number) => string;
+    difficultyChanged: (difficulty: string) => string;
+    playerRenamed: (name: string) => string;
+    scoreSaved: (score: number) => string;
+    scoreTooLow: string;
+    leaderboardCleared: string;
   };
   fx: {
     roomBuilt: string;
@@ -204,6 +220,7 @@ export interface TranslationBundle {
     prioritized: string;
     comfort: string;
     newGoals: string;
+    scoreSaved: string;
     roomLevel: (level: number) => string;
   };
   objectives: {
@@ -211,6 +228,7 @@ export interface TranslationBundle {
   };
   grades: Record<TreatmentGrade, string>;
   priorities: Record<PatientPriority, string>;
+  difficulties: Record<DifficultyId, LocalizedSkillText & { shortTitle: string }>;
   carePolicies: Record<CarePolicy, LocalizedSkillText & { shortTitle: string }>;
 }
 
@@ -236,6 +254,9 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       soothePatient: 'Soothe Pet',
       prioritizePatient: 'Priority Triage',
       upgradeComfort: 'Upgrade Comfort',
+      saveScore: 'Save Score',
+      clearLeaderboard: 'Clear Board',
+      renamePlayer: 'Rename',
     },
     disabledReasons: {
       notEnoughMoney: (amount) => `Need $${amount}`,
@@ -328,6 +349,14 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       coachBuild: (room) => `Build ${room} to cover active demand or chapter goals.`,
       coachUpgrade: 'Upgrade a busy room to improve throughput and payouts.',
       coachHire: 'Hire another staff member to cover more rooms at once.',
+      player: 'Player',
+      score: 'Score',
+      bestScore: 'Best',
+      leaderboard: 'Leaderboard',
+      difficulty: 'Difficulty',
+      runs: 'Runs',
+      rank: 'Rank',
+      noScores: 'Save a run to start the board.',
     },
     tutorial: {
       title: 'Grow your pet hospital',
@@ -451,6 +480,11 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       waitingComfortMaxed: 'The waiting garden is already as cozy as it gets.',
       careStreak: (streak, bonus) => `${streak} good-care streak! Extra bonus: $${bonus}.`,
       objectiveWaveUnlocked: (wave) => `Chapter ${wave} goals unlocked. The hospital is growing!`,
+      difficultyChanged: (difficulty) => `${difficulty} mode selected. A fresh run is ready.`,
+      playerRenamed: (name) => `Player profile updated: ${name}.`,
+      scoreSaved: (score) => `Score ${score} saved to the leaderboard.`,
+      scoreTooLow: 'Treat at least one pet before saving a score.',
+      leaderboardCleared: 'Local leaderboard cleared.',
     },
     fx: {
       roomBuilt: '+ room',
@@ -468,6 +502,7 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       prioritized: 'priority',
       comfort: 'comfort',
       newGoals: 'new goals',
+      scoreSaved: 'saved',
       roomLevel: (level) => `Lv ${level}`,
     },
     objectives: {
@@ -494,6 +529,23 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
           return `Earn $${objective.target} in one day`;
         }
         return `Hire ${objective.target} staff`;
+      },
+    },
+    difficulties: {
+      cozy: {
+        title: 'Cozy Clinic',
+        shortTitle: 'Cozy',
+        description: 'More cash, slower arrivals, and calmer pets for relaxed building.',
+      },
+      classic: {
+        title: 'Classic Shift',
+        shortTitle: 'Classic',
+        description: 'Balanced pacing for the standard management loop.',
+      },
+      expert: {
+        title: 'Expert Rush',
+        shortTitle: 'Expert',
+        description: 'Less cash, faster pressure, stricter scores, and higher score multipliers.',
       },
     },
     grades: {
@@ -545,6 +597,9 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       soothePatient: '安抚宠物',
       prioritizePatient: '优先分诊',
       upgradeComfort: '升级舒适度',
+      saveScore: '保存积分',
+      clearLeaderboard: '清空榜单',
+      renamePlayer: '改名',
     },
     disabledReasons: {
       notEnoughMoney: (amount) => `还需要 $${amount}`,
@@ -637,6 +692,14 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       coachBuild: (room) => `建造 ${room}，覆盖当前需求或章节目标。`,
       coachUpgrade: '升级繁忙房间，提高吞吐和收益。',
       coachHire: '雇佣更多员工，让多个房间同时运转。',
+      player: '玩家',
+      score: '积分',
+      bestScore: '最佳',
+      leaderboard: '排行榜',
+      difficulty: '难度',
+      runs: '局数',
+      rank: '排名',
+      noScores: '保存一次经营积分后上榜。',
     },
     tutorial: {
       title: '扩建你的宠物医院',
@@ -760,6 +823,11 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       waitingComfortMaxed: '候诊花园已经足够舒适。',
       careStreak: (streak, bonus) => `${streak} 次优质护理连胜！额外奖金：$${bonus}。`,
       objectiveWaveUnlocked: (wave) => `第 ${wave} 章目标已解锁，医院正在扩张！`,
+      difficultyChanged: (difficulty) => `已选择${difficulty}，新一局已准备好。`,
+      playerRenamed: (name) => `玩家档案已更新：${name}。`,
+      scoreSaved: (score) => `积分 ${score} 已保存到排行榜。`,
+      scoreTooLow: '至少治疗一只宠物后才能保存积分。',
+      leaderboardCleared: '本地排行榜已清空。',
     },
     fx: {
       roomBuilt: '+ 房间',
@@ -777,6 +845,7 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       prioritized: '优先',
       comfort: '舒适',
       newGoals: '新目标',
+      scoreSaved: '已保存',
       roomLevel: (level) => `${level}级`,
     },
     objectives: {
@@ -803,6 +872,23 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
           return `单日收入达到 $${objective.target}`;
         }
         return `雇佣 ${objective.target} 名员工`;
+      },
+    },
+    difficulties: {
+      cozy: {
+        title: '温馨诊所',
+        shortTitle: '温馨',
+        description: '资金更多、来客更慢、宠物更有耐心，适合轻松建设。',
+      },
+      classic: {
+        title: '经典班次',
+        shortTitle: '经典',
+        description: '标准经营节奏，收支和压力保持平衡。',
+      },
+      expert: {
+        title: '专家高峰',
+        shortTitle: '专家',
+        description: '资金更少、压力更快、评分更严，但积分倍率更高。',
       },
     },
     grades: {

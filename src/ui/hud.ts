@@ -1,6 +1,6 @@
 import { ILLNESSES, MAX_ROOM_LEVEL, ROOM_DEFINITIONS, SKILL_DEFINITIONS, SKILL_ORDER } from '../game/simulation/content';
-import { getIllness, getRoomUpgradeCost, getSkillRank, getStaffXpForNextLevel, getWaitingComfortUpgradeCost, type HospitalSimulation } from '../game/simulation/hospitalSimulation';
-import type { CarePolicy, DailyReport, GameState, HospitalObjective, Locale, PatientState, RoomKind, RoomState, SkillId, StaffState, TreatmentReport } from '../game/simulation/types';
+import { DIFFICULTY_DEFINITIONS, getIllness, getRoomUpgradeCost, getSkillRank, getStaffXpForNextLevel, getWaitingComfortUpgradeCost, type HospitalSimulation } from '../game/simulation/hospitalSimulation';
+import type { CarePolicy, DailyReport, DifficultyId, GameState, HospitalObjective, Locale, PatientState, RoomKind, RoomState, SkillId, StaffState, TreatmentReport } from '../game/simulation/types';
 import { getIllnessTitle, getObjectiveTitle, getRoomText, getSkillText, getTranslations } from '../i18n/translations';
 
 export class HospitalHud {
@@ -233,6 +233,32 @@ export class HospitalHud {
       return;
     }
 
+    if (actionName === 'set-difficulty') {
+      const difficulty = action.dataset.difficulty as DifficultyId | undefined;
+      if (difficulty) {
+        this.simulation.dispatch({ type: 'setDifficulty', difficulty });
+      }
+      return;
+    }
+
+    if (actionName === 'rename-player') {
+      const name = window.prompt(getTranslations(this.state.locale).hud.player, this.state.player.name);
+      if (name !== null) {
+        this.simulation.dispatch({ type: 'setPlayerName', name });
+      }
+      return;
+    }
+
+    if (actionName === 'save-score') {
+      this.simulation.dispatch({ type: 'saveScore' });
+      return;
+    }
+
+    if (actionName === 'clear-leaderboard') {
+      this.simulation.dispatch({ type: 'clearLeaderboard' });
+      return;
+    }
+
     if (actionName === 'hire-staff') {
       this.simulation.dispatch({ type: 'hireStaff' });
       return;
@@ -359,6 +385,7 @@ export class HospitalHud {
       action.dataset.patientId ?? '',
       action.dataset.kind ?? '',
       action.dataset.locale ?? '',
+      action.dataset.difficulty ?? '',
       action.dataset.speed ?? '',
       action.dataset.policy ?? '',
       action.dataset.skillId ?? '',
@@ -394,10 +421,10 @@ export class HospitalHud {
           </div>
           <div class="status-strip">
             ${this.metricCard(text.hud.money, `$${Math.round(this.state.money)}`, this.state.money < 0 ? 'bad' : 'good')}
+            ${this.metricCard(text.hud.score, `${Math.round(this.state.metrics.score)}`, this.state.metrics.score >= this.state.player.bestScore && this.state.metrics.score > 0 ? 'good' : 'neutral')}
             ${this.metricCard(text.hud.reputation, `${Math.round(this.state.reputation)}%`, this.state.reputation < 35 ? 'bad' : 'good')}
             ${this.metricCard(text.hud.careStreak, `×${this.state.metrics.careStreak}`, this.state.metrics.careStreak >= 3 ? 'good' : 'neutral')}
             ${this.metricCard(text.hud.day, `${this.state.day}`, 'neutral')}
-            ${this.metricCard(text.hud.time, `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`, 'neutral')}
           </div>
           <div class="top-actions">
             <div class="locale-toggle" aria-label="${text.hud.language}">
@@ -417,6 +444,9 @@ export class HospitalHud {
             <strong>${this.state.patients.length}</strong>
           </div>
           ${this.renderPressureMeter()}
+          ${this.renderPlayerProgress()}
+          ${this.renderDifficultyControls()}
+          ${this.renderLeaderboard()}
           ${this.renderOperationsWatch()}
           ${this.renderCoachTip()}
           ${this.renderArrivalMeter()}
@@ -574,6 +604,62 @@ export class HospitalHud {
           <small>${pressure}%</small>
         </span>
         <i style="--pressure:${pressure}%"></i>
+      </div>
+    `;
+  }
+
+  private renderPlayerProgress(): string {
+    const text = getTranslations(this.state.locale);
+    return `
+      <div class="progress-card player-card">
+        <span>
+          <strong>${text.hud.player}</strong>
+          <button class="mini-button" data-action="rename-player">${text.actions.renamePlayer}</button>
+        </span>
+        <b>${this.escapeHtml(this.state.player.name)}</b>
+        <small>${text.hud.score}: ${Math.round(this.state.metrics.score)} · ${text.hud.bestScore}: ${Math.round(this.state.player.bestScore)} · ${text.hud.runs}: ${this.state.player.totalRuns}</small>
+        <button class="mini-button save-score-button" data-action="save-score">${text.actions.saveScore}</button>
+      </div>
+    `;
+  }
+
+  private renderDifficultyControls(): string {
+    const text = getTranslations(this.state.locale);
+    const difficulties = Object.keys(DIFFICULTY_DEFINITIONS) as DifficultyId[];
+    return `
+      <div class="progress-card difficulty-card">
+        <strong>${text.hud.difficulty}</strong>
+        <div class="difficulty-buttons">
+          ${difficulties.map((difficulty) => {
+            const difficultyText = text.difficulties[difficulty];
+            return `
+              <button class="mini-button ${this.state.difficulty === difficulty ? 'active' : ''}" data-action="set-difficulty" data-difficulty="${difficulty}" title="${difficultyText.description}">
+                ${difficultyText.shortTitle} ×${DIFFICULTY_DEFINITIONS[difficulty].scoreMultiplier.toFixed(2)}
+              </button>
+            `;
+          }).join('')}
+        </div>
+        <small>${text.difficulties[this.state.difficulty].description}</small>
+      </div>
+    `;
+  }
+
+  private renderLeaderboard(): string {
+    const text = getTranslations(this.state.locale);
+    const rows = this.state.leaderboard.slice(0, 5);
+    return `
+      <div class="progress-card leaderboard-card">
+        <span>
+          <strong>${text.hud.leaderboard}</strong>
+          <button class="mini-button" data-action="clear-leaderboard">${text.actions.clearLeaderboard}</button>
+        </span>
+        ${rows.length === 0 ? `<small>${text.hud.noScores}</small>` : rows.map((entry, index) => `
+          <div class="leaderboard-row ${entry.playerName === this.state.player.name ? 'current' : ''}">
+            <b>#${index + 1}</b>
+            <span>${this.escapeHtml(entry.playerName)}<small>${text.difficulties[entry.difficulty].shortTitle} · ${text.hud.day} ${entry.day}</small></span>
+            <strong>${Math.round(entry.score)}</strong>
+          </div>
+        `).join('')}
       </div>
     `;
   }
@@ -1056,6 +1142,15 @@ export class HospitalHud {
 
   private hireCost(): number {
     return 160 + this.state.staff.length * 45;
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
   }
 }
 

@@ -32,7 +32,25 @@
 7. 使用收入升级房间、雇佣员工、提升候诊舒适度或培训员工。
 8. 根据每日报告和运营预警继续调整布局与策略。
 
-### 4. 房间类型
+### 4. 用户、积分与排行榜
+
+游戏会在浏览器本地保存一个玩家档案，包括玩家名、游玩局数和历史最佳积分。左侧“玩家”卡片可以改名、保存当前积分，并查看本地排行榜。
+
+积分主要来自治疗收入、护理质量、星级、患者优先级和护理连胜。专家难度会给更高积分倍率，但经营压力也更大。
+
+排行榜只保存在当前浏览器的 `localStorage` 中，不需要后端服务。点击“保存积分”会把当前局的积分、天数、治疗数、口碑和难度写入榜单；点击“清空榜单”会清除本地排行榜。
+
+### 5. 难度模式
+
+| 难度 | 特点 | 适合玩家 |
+| --- | --- | --- |
+| 温馨诊所 | 初始资金更多、来客更慢、宠物更有耐心、维护费更低，积分倍率较低。 | 想轻松建设和熟悉系统的玩家。 |
+| 经典班次 | 标准资金、标准压力、标准积分倍率。 | 想体验完整经营循环的玩家。 |
+| 专家高峰 | 初始资金更少、来客更快、宠物耐心更少、维护费更高、队列压力更明显，但积分倍率最高。 | 想挑战排名和高压调度的玩家。 |
+
+切换难度会开启一局新的经营，保留玩家档案和排行榜，但重置当前医院状态。
+
+### 6. 房间类型
 
 | 房间 | 英文名 | 适合病例 | 特点 |
 | --- | --- | --- | --- |
@@ -43,7 +61,7 @@
 
 建议开局优先补齐基础诊室，再根据队列中“Needs / 需要”的房间需求扩建。
 
-### 5. 宠物与优先级
+### 7. 宠物与优先级
 
 宠物患者会带着不同病例来到医院，并拥有耐心值。等待越久，耐心越低；耐心耗尽后患者会离开，影响当日表现。
 
@@ -58,7 +76,7 @@
 - 安抚宠物：花费资金恢复部分耐心。
 - 优先分诊：为重要患者添加优先标记，让其在队列排序中更靠前。
 
-### 6. 员工系统
+### 8. 员工系统
 
 员工拥有角色、专长、精力、等级、经验和技能点。
 
@@ -70,7 +88,7 @@
 
 员工会在治疗后获得经验，升级后得到技能点。精力过低时效率会受影响，需要送去休息室恢复。
 
-### 7. 技能树
+### 9. 技能树
 
 | 技能 | 英文名 | 效果 |
 | --- | --- | --- |
@@ -81,13 +99,13 @@
 
 建议早期优先点“快速诊断”和“温柔双手”，中后期再强化清洁与路线效率。
 
-### 8. 房间升级与清洁
+### 10. 房间升级与清洁
 
 房间最高可升级到 3 级。升级通常能提升治疗吞吐和收益，并重置清洁度。
 
 清洁度会随使用下降。清洁度过低时，地图上会出现风险标记，治疗表现和运营稳定性都会受到影响。可以在房间检查面板中执行“清洁房间”。
 
-### 9. 护理策略
+### 11. 护理策略
 
 每个房间可以设置护理策略：
 
@@ -97,13 +115,13 @@
 
 如果队列变长，切换到快速策略；如果追求高评分和连胜，使用舒适策略。
 
-### 10. 候诊舒适度
+### 12. 候诊舒适度
 
 候诊舒适度是全局设施升级。提升后，等待中的宠物耐心下降更慢，更适合应对高峰期和复杂病例。
 
 当目标要求提升候诊体验，或经常出现排队风险时，应优先升级候诊舒适度。
 
-### 11. 运营预警
+### 13. 运营预警
 
 左侧运营卡片会提醒关键风险：
 
@@ -113,7 +131,7 @@
 
 地图上也会出现可视化提示，例如低清洁度百分比、员工疲劳感叹号、休息中的 Z 标记等。
 
-### 12. 阶段目标与报告
+### 14. 阶段目标与报告
 
 游戏会持续生成阶段目标，例如：
 
@@ -130,7 +148,7 @@
 
 治疗报告会展示评分、星级、收入、奖金和护理策略；每日报告会总结当天治疗数、流失数、收入、最佳质量和声誉。
 
-### 13. 操作方式
+### 15. 操作方式
 
 | 操作 | 说明 |
 | --- | --- |
@@ -145,7 +163,7 @@
 | `4` | 选择阳光恢复病房。 |
 | `中文 / English` | 切换中文和英文界面。 |
 
-### 14. 新手建议
+### 16. 新手建议
 
 - 开局先保证至少有一个诊室，再观察队列需求补房间。
 - 不要一次性花光资金，保留清洁、安抚和雇佣预算。
@@ -154,7 +172,7 @@
 - 房间清洁低于风险线时优先处理，避免收益和质量下滑。
 - 目标推荐的房间通常是当前最值得建设的选择。
 
-### 15. 技术结构
+### 17. 技术结构
 
 当前项目采用 Phaser、TypeScript 和 Vite：
 
@@ -200,7 +218,25 @@ Your main goals are to:
 7. Spend earnings on upgrades, hiring, comfort, cleaning, and training.
 8. Use operations warnings and daily reports to refine your strategy.
 
-### 4. Room Types
+### 4. Player Profile, Score, and Leaderboard
+
+The game stores a local player profile in the browser, including player name, total runs, and best score. Use the left player card to rename the profile, save the current score, and review the local leaderboard.
+
+Score mainly comes from treatment revenue, care quality, stars, patient priority, and care streaks. Expert difficulty gives a higher score multiplier but creates more pressure.
+
+The leaderboard is local-only through `localStorage`; no backend service is required. Saving a score records the current score, day, treated count, reputation, and difficulty. Clearing the board removes local leaderboard entries.
+
+### 5. Difficulty Modes
+
+| Difficulty | Rules | Best for |
+| --- | --- | --- |
+| Cozy Clinic | More starting money, slower arrivals, more patient pets, lower upkeep, and lower score multiplier. | Relaxed building and learning the systems. |
+| Classic Shift | Standard money, pressure, and score multiplier. | The balanced management loop. |
+| Expert Rush | Less starting money, faster arrivals, less patience, higher upkeep, stronger queue pressure, and the highest score multiplier. | Players chasing high-score ranking and harder scheduling. |
+
+Changing difficulty starts a fresh run while preserving the player profile and leaderboard.
+
+### 6. Room Types
 
 | Room | Best For | Notes |
 | --- | --- | --- |
@@ -211,7 +247,7 @@ Your main goals are to:
 
 A good opening is to secure basic exam coverage first, then expand based on the queue’s “Needs” labels.
 
-### 5. Pets and Priorities
+### 7. Pets and Priorities
 
 Each pet arrives with a case, required room, priority, and patience timer. If patience reaches zero, the pet leaves and your daily performance suffers.
 
@@ -226,7 +262,7 @@ Available patient actions:
 - Soothe Pet: Spend money to restore patience.
 - Priority Triage: Mark an important pet so it moves ahead in queue sorting.
 
-### 6. Staff System
+### 8. Staff System
 
 Staff have roles, specialties, energy, levels, XP, skill points, and trained skills.
 
@@ -238,7 +274,7 @@ Roles include:
 
 Staff gain XP from treatments and earn skill points on level-up. Low-energy staff should rest in the lounge before they become an operational risk.
 
-### 7. Skill Tree
+### 9. Skill Tree
 
 | Skill | Effect |
 | --- | --- |
@@ -249,13 +285,13 @@ Staff gain XP from treatments and earn skill points on level-up. Low-energy staf
 
 Early upgrades in Fast Diagnosis and Calm Hands are usually the safest first investments.
 
-### 8. Room Upgrades and Cleaning
+### 10. Room Upgrades and Cleaning
 
 Rooms can be upgraded up to level 3. Upgrades improve throughput and payouts, and also refresh cleanliness.
 
 Cleanliness drops as rooms are used. Dirty rooms show risk markers and can hurt operating stability. Use the room inspector to clean rooms when cleanliness gets low.
 
-### 9. Care Policies
+### 11. Care Policies
 
 Each room can use one of three care policies:
 
@@ -265,13 +301,13 @@ Each room can use one of three care policies:
 
 Switch to Express during rush periods, and use Comfort when chasing high grades or care streaks.
 
-### 10. Waiting Comfort
+### 12. Waiting Comfort
 
 Waiting comfort is a global facility upgrade. Higher comfort slows patience loss while pets wait, making the hospital more resilient during rush hour.
 
 Upgrade it when objectives request it or when queue-risk warnings appear often.
 
-### 11. Operations Watch
+### 13. Operations Watch
 
 The operations card highlights urgent problems:
 
@@ -281,7 +317,7 @@ The operations card highlights urgent problems:
 
 The map also shows visual markers such as cleanliness percentages, red tired-staff alerts, and resting indicators.
 
-### 12. Objectives and Reports
+### 14. Objectives and Reports
 
 Dynamic objectives may ask you to:
 
@@ -298,7 +334,7 @@ Completing objectives grants money and reputation, then advances the chapter wav
 
 Treatment reports show grade, stars, revenue, bonus, and care policy. Daily reports summarize treated pets, lost pets, revenue, best quality, and reputation.
 
-### 13. Controls
+### 15. Controls
 
 | Input | Action |
 | --- | --- |
@@ -313,7 +349,7 @@ Treatment reports show grade, stars, revenue, bonus, and care policy. Daily repo
 | `4` | Select Sunny Recovery Ward. |
 | `中文 / English` | Switch interface language. |
 
-### 14. Beginner Tips
+### 16. Beginner Tips
 
 - Start with exam coverage, then build around queue demand.
 - Keep reserve money for cleaning, soothing, and hiring.
@@ -322,7 +358,7 @@ Treatment reports show grade, stars, revenue, bonus, and care policy. Daily repo
 - Clean risky rooms before quality and income suffer.
 - Follow the recommended build highlight when unsure what to build next.
 
-### 15. Technical Structure
+### 17. Technical Structure
 
 The project uses Phaser, TypeScript, and Vite:
 

@@ -1,8 +1,11 @@
 import { ILLNESSES, MAX_ROOM_LEVEL, PET_KINDS, PET_NAMES, ROOM_DEFINITIONS, SKILL_DEFINITIONS, STAFF_NAMES } from './content';
+import { clearLeaderboard, loadLeaderboard, loadPlayerProfile, recordLeaderboardEntry, savePlayerProfile, updatePlayerName } from './playerProgress';
 import { createPathToPoint, createPathToRoom } from './systems/pathfinding';
 import { DEFAULT_LOCALE, getIllnessTitle, getObjectiveTitle, getRoomText, getSkillText, getTranslations } from '../../i18n/translations';
 import type {
   BuildPreview,
+  DifficultyDefinition,
+  DifficultyId,
   GameState,
   HospitalAction,
   HospitalEvent,
@@ -42,6 +45,39 @@ const STAFF_REST_ENERGY_TARGET = 82;
 const SOOTHE_COST = 32;
 const MAX_WAITING_COMFORT_LEVEL = 3;
 
+export const DIFFICULTY_DEFINITIONS: Record<DifficultyId, DifficultyDefinition> = {
+  cozy: {
+    id: 'cozy',
+    startingMoney: 980,
+    startingReputation: 62,
+    spawnMultiplier: 1.2,
+    patienceMultiplier: 1.16,
+    upkeepMultiplier: 0.86,
+    scoreMultiplier: 0.86,
+    pressureMultiplier: 0.84,
+  },
+  classic: {
+    id: 'classic',
+    startingMoney: 820,
+    startingReputation: 55,
+    spawnMultiplier: 1,
+    patienceMultiplier: 1,
+    upkeepMultiplier: 1,
+    scoreMultiplier: 1,
+    pressureMultiplier: 1,
+  },
+  expert: {
+    id: 'expert',
+    startingMoney: 640,
+    startingReputation: 47,
+    spawnMultiplier: 0.76,
+    patienceMultiplier: 0.78,
+    upkeepMultiplier: 1.22,
+    scoreMultiplier: 1.34,
+    pressureMultiplier: 1.18,
+  },
+};
+
 export class HospitalSimulation extends EventTarget {
   private state: GameState;
 
@@ -57,7 +93,12 @@ export class HospitalSimulation extends EventTarget {
   public dispatch(action: HospitalAction): void {
     if (action.type === 'restart') {
       const locale = this.state.locale;
-      this.state = createInitialState(locale);
+      const difficulty = this.state.difficulty;
+      const player = this.state.player;
+      const leaderboard = this.state.leaderboard;
+      this.state = createInitialState(locale, difficulty, player, leaderboard);
+      this.state.player.totalRuns += 1;
+      savePlayerProfile(this.state.player);
       this.emit();
       return;
     }
@@ -82,6 +123,32 @@ export class HospitalSimulation extends EventTarget {
 
     if (action.type === 'setLocale') {
       this.setLocale(action.locale);
+      this.emit();
+      return;
+    }
+
+    if (action.type === 'setDifficulty') {
+      this.setDifficulty(action.difficulty);
+      this.emit();
+      return;
+    }
+
+    if (action.type === 'setPlayerName') {
+      this.state.player = updatePlayerName(this.state.player, action.name);
+      this.pushEvent(getTranslations(this.state.locale).events.playerRenamed(this.state.player.name), 'good');
+      this.emit();
+      return;
+    }
+
+    if (action.type === 'saveScore') {
+      this.saveScore();
+      this.emit();
+      return;
+    }
+
+    if (action.type === 'clearLeaderboard') {
+      this.state.leaderboard = clearLeaderboard();
+      this.pushEvent(getTranslations(this.state.locale).events.leaderboardCleared, 'neutral');
       this.emit();
       return;
     }
@@ -181,6 +248,41 @@ export class HospitalSimulation extends EventTarget {
   private setLocale(locale: Locale): void {
     this.state.locale = locale;
     this.state.events = createInitialEvents(this.state);
+  }
+
+  private setDifficulty(difficulty: DifficultyId): void {
+    if (this.state.difficulty === difficulty) {
+      return;
+    }
+
+    const locale = this.state.locale;
+    const player = this.state.player;
+    const leaderboard = this.state.leaderboard;
+    this.state = createInitialState(locale, difficulty, player, leaderboard);
+    this.state.player.totalRuns += 1;
+    savePlayerProfile(this.state.player);
+    this.pushEvent(getTranslations(this.state.locale).events.difficultyChanged(getTranslations(this.state.locale).difficulties[difficulty].title), 'good');
+  }
+
+  private saveScore(): void {
+    const score = Math.round(this.state.metrics.score);
+    if (score <= 0) {
+      this.pushEvent(getTranslations(this.state.locale).events.scoreTooLow, 'neutral');
+      return;
+    }
+
+    this.state.player.bestScore = Math.max(this.state.player.bestScore, score);
+    savePlayerProfile(this.state.player);
+    this.state.leaderboard = recordLeaderboardEntry({
+      playerName: this.state.player.name,
+      score,
+      day: this.state.day,
+      treated: this.state.metrics.totalTreated,
+      reputation: Math.round(this.state.reputation),
+      difficulty: this.state.difficulty,
+    });
+    this.pushFx('skill', 2.2, 2.2, getTranslations(this.state.locale).fx.scoreSaved);
+    this.pushEvent(getTranslations(this.state.locale).events.scoreSaved(score), 'good');
   }
 
   public update(deltaSeconds: number): void {
@@ -502,7 +604,7 @@ export class HospitalSimulation extends EventTarget {
     const waitingSpot = WAITING_SPOTS[this.state.patients.length % WAITING_SPOTS.length];
     const petKind = pick(PET_KINDS);
     const priority = rollPatientPriority(this.state.reputation, this.state.rushActiveSeconds > 0);
-    const patienceSeconds = Math.max(14, illness.patienceSeconds * getPriorityPatienceMultiplier(priority));
+    const patienceSeconds = Math.max(11, illness.patienceSeconds * getPriorityPatienceMultiplier(priority) * getDifficulty(this.state).patienceMultiplier);
     const patient: PatientState = {
       id: `patient-${this.state.nextPatientId++}`,
       name: pick(PET_NAMES),
@@ -641,18 +743,25 @@ export class HospitalSimulation extends EventTarget {
 
       if (patient.treatmentRemaining <= 0) {
         const illness = ILLNESSES.find((candidate) => candidate.id === patient.illnessId);
-        const quality = calculateTreatmentQuality(patient, room, staff);
+        const quality = calculateTreatmentQuality(patient, room, staff, this.state.difficulty);
         const baseRevenue = Math.round(((illness?.value ?? 60) + definition.revenueBonus + this.state.reputation * 0.25 + (room.level - 1) * 24 + sparkleCare * 12) * getPriorityRevenueMultiplier(patient.priority));
         const stars = getTreatmentStars(quality.score);
         const streak = quality.grade === 'rough' ? 0 : this.state.metrics.careStreak + 1;
         const streakBonus = getCareStreakBonus(baseRevenue, streak);
         const bonus = Math.round(baseRevenue * quality.bonusRate) + streakBonus;
         const revenue = baseRevenue + bonus;
+        const scoreGain = calculateScoreGain(revenue, quality.score, stars, patient.priority, streak, this.state.difficulty);
         this.state.money += revenue;
         this.state.metrics.revenueToday += revenue;
         this.state.metrics.bestQualityToday = Math.max(this.state.metrics.bestQualityToday, quality.score);
         this.state.metrics.careStreak = streak;
         this.state.metrics.bestCareStreak = Math.max(this.state.metrics.bestCareStreak, streak);
+        this.state.metrics.score += scoreGain;
+        this.state.metrics.bestScore = Math.max(this.state.metrics.bestScore, this.state.metrics.score, this.state.player.bestScore);
+        if (this.state.metrics.score > this.state.player.bestScore) {
+          this.state.player.bestScore = Math.round(this.state.metrics.score);
+          savePlayerProfile(this.state.player);
+        }
         this.state.reputation = clamp(this.state.reputation + quality.reputationDelta, 0, 100);
         this.state.metrics.treatedToday += 1;
         this.state.metrics.totalTreated += 1;
@@ -667,7 +776,7 @@ export class HospitalSimulation extends EventTarget {
         patient.pathIndex = 0;
         setPatientTargetFromPath(patient);
         this.updateObjectiveProgress();
-        this.pushFx('heal', patient.x, patient.y, `${'★'.repeat(stars)}|+$${revenue}|${quality.score}%`);
+        this.pushFx('heal', patient.x, patient.y, `${'★'.repeat(stars)}|+$${revenue}|+${scoreGain}`);
         if (streak >= 3) {
           this.pushEvent(getTranslations(this.state.locale).events.careStreak(streak, streakBonus), 'good');
         }
@@ -721,9 +830,10 @@ export class HospitalSimulation extends EventTarget {
   }
 
   private chargeUpkeep(): void {
+    const difficulty = getDifficulty(this.state);
     const upkeep = this.state.rooms.reduce((sum, room) => sum + ROOM_DEFINITIONS[room.kind].upkeep + (room.level - 1) * 8, 0);
     const wages = this.state.staff.length * 32;
-    const total = upkeep + wages;
+    const total = Math.round((upkeep + wages) * difficulty.upkeepMultiplier);
     this.state.money -= total;
     this.pushEvent(getTranslations(this.state.locale).events.dailyUpkeep(this.state.day, total), total > this.state.money ? 'warning' : 'neutral');
 
@@ -737,7 +847,7 @@ export class HospitalSimulation extends EventTarget {
   private updatePressureAndRush(deltaSeconds: number): void {
     const waitingPatients = this.state.patients.filter((patient) => patient.status !== 'leaving').length;
     const openCapacity = Math.max(1, this.state.rooms.length * 2);
-    this.state.queuePressure = clamp((waitingPatients / openCapacity) * 100, 0, 100);
+    this.state.queuePressure = clamp((waitingPatients / openCapacity) * 100 * getDifficulty(this.state).pressureMultiplier, 0, 100);
 
     if (this.state.rushActiveSeconds > 0) {
       this.state.rushActiveSeconds = Math.max(0, this.state.rushActiveSeconds - deltaSeconds);
@@ -755,13 +865,14 @@ export class HospitalSimulation extends EventTarget {
   }
 
   private getNextSpawnDelay(): number {
+    const difficulty = getDifficulty(this.state);
     const baseDelay = Math.max(5.2, 11.5 - this.state.day * 0.35 - this.state.reputation * 0.022);
     const rushMultiplier = this.state.rushActiveSeconds > 0 ? 0.52 : 1;
     const pressureMultiplier = this.state.queuePressure > 75 ? 1.18 : 1;
     if (this.state.queuePressure > 82 && this.state.events[0]?.message !== getTranslations(this.state.locale).events.pressureWarning) {
       this.pushEvent(getTranslations(this.state.locale).events.pressureWarning, 'warning');
     }
-    return Math.max(2.6, baseDelay * rushMultiplier * pressureMultiplier);
+    return Math.max(2.1, baseDelay * rushMultiplier * pressureMultiplier * difficulty.spawnMultiplier);
   }
 
   private releaseRoom(patient: PatientState): void {
@@ -879,20 +990,29 @@ export class HospitalSimulation extends EventTarget {
   }
 }
 
-export function createInitialState(locale: Locale = DEFAULT_LOCALE): GameState {
+export function createInitialState(
+  locale: Locale = DEFAULT_LOCALE,
+  difficulty: DifficultyId = 'classic',
+  player = loadPlayerProfile(),
+  leaderboard = loadLeaderboard(),
+): GameState {
+  const difficultyDefinition = DIFFICULTY_DEFINITIONS[difficulty];
   const state: GameState = {
     grid: {
       columns: 18,
       rows: 12,
       tileSize: 48,
     },
-    money: 820,
-    reputation: 55,
+    money: difficultyDefinition.startingMoney,
+    reputation: difficultyDefinition.startingReputation,
     day: 1,
     clock: 8,
     paused: false,
     speed: 1,
     locale,
+    difficulty,
+    player,
+    leaderboard,
     selectedRoomKind: 'exam',
     rooms: [],
     staff: [],
@@ -917,6 +1037,8 @@ export function createInitialState(locale: Locale = DEFAULT_LOCALE): GameState {
       bestQualityToday: 0,
       careStreak: 0,
       bestCareStreak: 0,
+      score: 0,
+      bestScore: player.bestScore,
     },
     nextRoomId: 1,
     nextPatientId: 1,
@@ -1179,13 +1301,14 @@ function getObjectiveProgress(state: GameState, objective: HospitalObjective): n
   return state.staff.length;
 }
 
-function calculateTreatmentQuality(patient: PatientState, room: RoomState, staff?: StaffState): { grade: TreatmentGrade; score: number; bonusRate: number; reputationDelta: number } {
+function calculateTreatmentQuality(patient: PatientState, room: RoomState, staff: StaffState | undefined, difficulty: DifficultyId): { grade: TreatmentGrade; score: number; bonusRate: number; reputationDelta: number } {
   const patienceRatio = clamp(patient.patience / patient.maxPatience, 0, 1);
   const staffEnergy = staff ? staff.energy / 100 : 0.42;
   const cleanliness = room.cleanliness / 100;
   const levelBoost = (room.level - 1) * 0.08;
   const policy = getCarePolicyEffect(room.carePolicy);
-  const score = Math.round(clamp(42 + patienceRatio * 25 + cleanliness * 20 + staffEnergy * 16 + levelBoost * 100 + policy.qualityBonus, 0, 100));
+  const difficultyPenalty = difficulty === 'expert' ? -6 : difficulty === 'cozy' ? 4 : 0;
+  const score = Math.round(clamp(42 + patienceRatio * 25 + cleanliness * 20 + staffEnergy * 16 + levelBoost * 100 + policy.qualityBonus + difficultyPenalty, 0, 100));
 
   if (score >= 82) {
     return { grade: 'excellent', score, bonusRate: 0.16, reputationDelta: 4.2 };
@@ -1194,6 +1317,13 @@ function calculateTreatmentQuality(patient: PatientState, room: RoomState, staff
     return { grade: 'good', score, bonusRate: 0.06, reputationDelta: 2.4 };
   }
   return { grade: 'rough', score, bonusRate: -0.08, reputationDelta: 0.8 };
+}
+
+function calculateScoreGain(revenue: number, qualityScore: number, stars: number, priority: PatientPriority, streak: number, difficulty: DifficultyId): number {
+  const priorityBonus = priority === 'vip' ? 44 : priority === 'urgent' ? 28 : 12;
+  const streakBonus = Math.min(120, streak * 10);
+  const rawScore = revenue * 0.75 + qualityScore * 3 + stars * 32 + priorityBonus + streakBonus;
+  return Math.max(1, Math.round(rawScore * DIFFICULTY_DEFINITIONS[difficulty].scoreMultiplier));
 }
 
 function getTreatmentStars(score: number): number {
@@ -1248,6 +1378,10 @@ function getCarePolicyEffect(policy: CarePolicy): { speedMultiplier: number; cle
     patienceRecovery: 0.08,
     qualityBonus: 0,
   };
+}
+
+function getDifficulty(state: Pick<GameState, 'difficulty'>): DifficultyDefinition {
+  return DIFFICULTY_DEFINITIONS[state.difficulty];
 }
 
 function rollPatientPriority(reputation: number, isRushActive: boolean): PatientPriority {

@@ -45,6 +45,74 @@ try {
   assert(Boolean(boot.coachText), 'coach card is visible');
   mark('boot and coach card');
 
+  await clickElement(evaluate, click, '[data-action="set-difficulty"][data-difficulty="expert"]', devtools);
+  let difficultyState = await evaluate(`(() => {
+    const state = window.petHospitalTest?.simulation.getState();
+    return {
+      difficulty: state?.difficulty ?? '',
+      money: state?.money ?? 0,
+      active: document.querySelector('[data-action="set-difficulty"].active')?.dataset.difficulty ?? '',
+      panel: document.querySelector('.left-panel')?.textContent ?? '',
+    };
+  })()`);
+  assert(difficultyState.difficulty === 'expert', 'expert difficulty click updates simulation difficulty');
+  assert(difficultyState.active === 'expert', 'expert difficulty button becomes active');
+  assert(difficultyState.money === 640, 'expert difficulty changes starting money');
+  assert(difficultyState.panel.includes('Expert') || difficultyState.panel.includes('专家'), 'difficulty card shows expert mode text');
+
+  await clickElement(evaluate, click, '[data-action="set-difficulty"][data-difficulty="classic"]', devtools);
+  difficultyState = await evaluate(`(() => {
+    const state = window.petHospitalTest?.simulation.getState();
+    return { difficulty: state?.difficulty ?? '', money: state?.money ?? 0 };
+  })()`);
+  assert(difficultyState.difficulty === 'classic', 'classic difficulty click restores simulation difficulty');
+  assert(difficultyState.money === 820, 'classic difficulty restores starting money');
+  mark('difficulty controls');
+
+  await evaluate(`window.prompt = () => 'Dr. Clicks'`);
+  await clickElement(evaluate, click, '[data-action="rename-player"]', devtools);
+  await wait(300);
+  const renamed = await evaluate(`(() => {
+    const state = window.petHospitalTest?.simulation.getState();
+    return {
+      name: state?.player.name ?? '',
+      panel: document.querySelector('.player-card')?.textContent ?? '',
+    };
+  })()`);
+  assert(renamed.name === 'Dr. Clicks', 'rename player click updates profile name');
+  assert(renamed.panel.includes('Dr. Clicks'), 'player card shows renamed profile');
+  mark('player rename prompt');
+
+  await prepareScoreScenario(evaluate);
+  await clickElement(evaluate, click, '[data-action="save-score"]', devtools);
+  const savedScore = await evaluate(`(() => {
+    const state = window.petHospitalTest?.simulation.getState();
+    return {
+      leaderboardCount: state?.leaderboard.length ?? 0,
+      topName: state?.leaderboard[0]?.playerName ?? '',
+      topScore: state?.leaderboard[0]?.score ?? 0,
+      panel: document.querySelector('.leaderboard-card')?.textContent ?? '',
+      best: state?.player.bestScore ?? 0,
+    };
+  })()`);
+  assert(savedScore.leaderboardCount > 0, 'save score click adds a leaderboard entry');
+  assert(savedScore.topName === 'Dr. Clicks', 'leaderboard entry uses current player name');
+  assert(savedScore.topScore === 4321, 'leaderboard entry stores current score');
+  assert(savedScore.best >= 4321, 'save score updates player best score');
+  assert(savedScore.panel.includes('4321'), 'leaderboard card renders saved score');
+  mark('score save and leaderboard');
+
+  await clickElement(evaluate, click, '[data-action="clear-leaderboard"]', devtools);
+  const clearedBoard = await evaluate(`(() => ({
+    count: window.petHospitalTest?.simulation.getState().leaderboard.length ?? -1,
+    panel: document.querySelector('.leaderboard-card')?.textContent ?? '',
+  }))()`);
+  assert(clearedBoard.count === 0, 'clear leaderboard click clears local leaderboard state');
+  assert(clearedBoard.panel.includes('Save') || clearedBoard.panel.includes('保存'), 'cleared leaderboard shows empty state');
+  mark('clear leaderboard');
+
+  await evaluate(`window.petHospitalTest?.simulation.dispatch({ type: 'setPaused', paused: false })`);
+
   await clickElement(evaluate, click, '[data-action="toggle-pause"]', devtools);
   let pauseText = await textOf(evaluate, '[data-action="toggle-pause"]');
   assert(pauseText.includes('Resume') || pauseText.includes('继续'), 'pause button toggles to resume');
@@ -418,6 +486,22 @@ async function prepareSoothePatientScenario(evaluate) {
     return true;
   })()`);
   assert(prepared, 'test mode exposes simulation for soothe scenario');
+}
+
+async function prepareScoreScenario(evaluate) {
+  const prepared = await evaluate(`(() => {
+    const simulation = window.petHospitalTest?.simulation;
+    if (!simulation) return false;
+    const state = simulation.getState();
+    state.paused = true;
+    state.metrics.score = 4321;
+    state.metrics.totalTreated = 9;
+    state.reputation = 77;
+    state.day = 4;
+    state.leaderboard = [];
+    return true;
+  })()`);
+  assert(prepared, 'test mode exposes simulation for score scenario');
 }
 
 async function verifyAllRoomKindsCanBuild(evaluate, click, canvas, devtools) {

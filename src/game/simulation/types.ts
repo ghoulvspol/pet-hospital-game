@@ -24,6 +24,8 @@ export type PatientPriority = 'normal' | 'urgent' | 'vip';
 
 export type CarePolicy = 'balanced' | 'express' | 'comfort';
 
+export type DifficultyId = 'cozy' | 'classic' | 'expert';
+
 export interface RoomDefinition {
   kind: RoomKind;
   title: string;
@@ -124,6 +126,37 @@ export interface HospitalMetrics {
   bestQualityToday: number;
   careStreak: number;
   bestCareStreak: number;
+  score: number;
+  bestScore: number;
+}
+
+export interface DifficultyDefinition {
+  id: DifficultyId;
+  startingMoney: number;
+  startingReputation: number;
+  spawnMultiplier: number;
+  patienceMultiplier: number;
+  upkeepMultiplier: number;
+  scoreMultiplier: number;
+  pressureMultiplier: number;
+}
+
+export interface PlayerProfile {
+  id: string;
+  name: string;
+  totalRuns: number;
+  bestScore: number;
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  playerName: string;
+  score: number;
+  day: number;
+  treated: number;
+  reputation: number;
+  difficulty: DifficultyId;
+  createdAt: number;
 }
 
 export interface FacilityState {
@@ -183,6 +216,9 @@ export interface GameState {
   paused: boolean;
   speed: number;
   locale: Locale;
+  difficulty: DifficultyId;
+  player: PlayerProfile;
+  leaderboard: LeaderboardEntry[];
   selectedRoomKind: RoomKind;
   inspectedRoomId?: string;
   inspectedPatientId?: string;
@@ -228,6 +264,10 @@ export type HospitalAction =
   | { type: 'setPaused'; paused: boolean }
   | { type: 'setSpeed'; speed: number }
   | { type: 'setLocale'; locale: Locale }
+  | { type: 'setDifficulty'; difficulty: DifficultyId }
+  | { type: 'setPlayerName'; name: string }
+  | { type: 'saveScore' }
+  | { type: 'clearLeaderboard' }
   | { type: 'restart' };
 
 export interface BuildPreview {
