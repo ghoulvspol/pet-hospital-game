@@ -1,0 +1,25 @@
+{
+  "name": "pet-hospital-game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test:clicks": "node scripts/verify-clicks.mjs",
+    "test:actions": "node scripts/verify-action-coverage.mjs",
+    "test:responsive": "node scripts/verify-responsive.mjs",
+    "test:long-run": "node scripts/verify-long-run.mjs",
+    "test:stress": "node scripts/verify-stress.mjs",
+    "test:visual": "node scripts/verify-visual.mjs",
+    "test:performance": "node scripts/verify-performance.mjs",
+    "test:all": "npm run build && npm run test:actions && npm run test:clicks && npm run test:responsive && npm run test:long-run && npm run test:stress && npm run test:visual && npm run test:performance"
+  },
+  "dependencies": {
+    "phaser": "4.0.0",
+    "typescript": "6.0.3",
+    "vite": "8.0.16"
+  },
+  "devDependencies": {}
+}

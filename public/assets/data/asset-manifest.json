@@ -1,0 +1,6 @@
+{
+  "characters": ["pet-dog", "pet-dog-walk", "pet-cat", "pet-cat-walk", "pet-rabbit", "pet-rabbit-walk", "pet-parrot", "pet-parrot-walk", "staff-vet", "staff-nurse", "staff-tech"],
+  "environment": ["floor-tile", "corridor-tile", "waiting-rug", "room-equipment-exam", "room-equipment-grooming", "room-equipment-lab", "room-equipment-recovery"],
+  "fx": ["sparkle", "heart", "warning"],
+  "license": "Original generated pixel art for this prototype."
+}
