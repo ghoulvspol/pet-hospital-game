@@ -111,6 +111,38 @@ try {
   assert(clearedBoard.panel.includes('Save') || clearedBoard.panel.includes('保存'), 'cleared leaderboard shows empty state');
   mark('clear leaderboard');
 
+  const initialLevelCard = await evaluate(`document.querySelector('.level-card')?.textContent ?? ''`);
+  assert(initialLevelCard.includes('1'), 'hospital level card renders the starting level');
+  await clickElement(evaluate, click, '[data-action="start-contract"]', devtools);
+  const startedContract = await evaluate(`(() => {
+    const state = window.petHospitalTest?.simulation.getState();
+    return {
+      active: state?.contracts.filter((contract) => contract.active && !contract.completed).length ?? 0,
+      panel: document.querySelector('.contract-list')?.textContent ?? '',
+    };
+  })()`);
+  assert(startedContract.active === 1, 'start contract click activates one contract');
+  assert(startedContract.panel.includes('Active') || startedContract.panel.includes('进行中'), 'contract card shows active status');
+  mark('contract start and level card');
+
+  await prepareContractCompletionScenario(evaluate);
+  await clickElement(evaluate, click, '[data-action="start-contract"][data-contract-id="clean-shift-test"]', devtools);
+  const completedContract = await evaluate(`(() => {
+    const state = window.petHospitalTest?.simulation.getState();
+    return {
+      completedContracts: state?.completedContracts ?? 0,
+      score: state?.metrics.score ?? 0,
+      level: state?.hospitalLevel.level ?? 0,
+      panel: document.querySelector('.level-card')?.textContent ?? '',
+      log: document.querySelector('.event-feed')?.textContent ?? '',
+    };
+  })()`);
+  assert(completedContract.completedContracts >= 1, 'contract completion increments completed contract count');
+  assert(completedContract.score >= 620, 'contract completion awards score');
+  assert(completedContract.level >= 2 || completedContract.panel.includes('XP'), 'contract completion contributes hospital level XP');
+  assert(completedContract.log.includes('contract') || completedContract.log.includes('合约'), 'contract completion writes a log event');
+  mark('contract completion rewards');
+
   await evaluate(`window.petHospitalTest?.simulation.dispatch({ type: 'setPaused', paused: false })`);
 
   await clickElement(evaluate, click, '[data-action="toggle-pause"]', devtools);
@@ -502,6 +534,34 @@ async function prepareScoreScenario(evaluate) {
     return true;
   })()`);
   assert(prepared, 'test mode exposes simulation for score scenario');
+}
+
+async function prepareContractCompletionScenario(evaluate) {
+  const prepared = await evaluate(`(() => {
+    const simulation = window.petHospitalTest?.simulation;
+    if (!simulation) return false;
+    const state = simulation.getState();
+    state.paused = true;
+    state.metrics.score = 0;
+    state.completedContracts = 0;
+    state.hospitalLevel.level = 1;
+    state.hospitalLevel.xp = state.hospitalLevel.nextXp - 60;
+    state.rooms.forEach((room) => { room.cleanliness = 100; });
+    state.contracts = [{
+      id: 'clean-shift-test',
+      kind: 'cleanShift',
+      target: Math.min(2, state.rooms.length),
+      progress: 0,
+      rewardMoney: 120,
+      rewardReputation: 2,
+      rewardScore: 620,
+      active: false,
+      completed: false,
+    }];
+    simulation.dispatch({ type: 'setPaused', paused: true });
+    return true;
+  })()`);
+  assert(prepared, 'test mode exposes simulation for contract completion scenario');
 }
 
 async function verifyAllRoomKindsCanBuild(evaluate, click, canvas, devtools) {

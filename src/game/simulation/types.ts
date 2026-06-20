@@ -16,7 +16,7 @@ export type HospitalFxKind = 'build' | 'heal' | 'upgrade' | 'skill' | 'warning';
 
 export type Locale = 'en' | 'zh';
 
-export type ObjectiveKind = 'treatPets' | 'buildRoomKind' | 'upgradeRoom' | 'reachReputation' | 'reachCareStreak' | 'upgradeWaitingComfort' | 'earnRevenueToday' | 'hireStaff';
+export type ObjectiveKind = 'treatPets' | 'buildRoomKind' | 'upgradeRoom' | 'reachReputation' | 'reachCareStreak' | 'upgradeWaitingComfort' | 'earnRevenueToday' | 'hireStaff' | 'reachScore' | 'treatUrgentPets' | 'completeContracts';
 
 export type TreatmentGrade = 'excellent' | 'good' | 'rough';
 
@@ -122,6 +122,7 @@ export interface HospitalMetrics {
   treatedToday: number;
   lostToday: number;
   totalTreated: number;
+  urgentTreated: number;
   revenueToday: number;
   bestQualityToday: number;
   careStreak: number;
@@ -171,6 +172,27 @@ export interface DailyReport {
   revenue: number;
   bestQuality: number;
   reputation: number;
+}
+
+export type ContractKind = 'rushCare' | 'vipWellness' | 'cleanShift' | 'trainingDay';
+
+export interface HospitalLevelState {
+  level: number;
+  title: string;
+  xp: number;
+  nextXp: number;
+}
+
+export interface HospitalContract {
+  id: string;
+  kind: ContractKind;
+  target: number;
+  progress: number;
+  rewardMoney: number;
+  rewardReputation: number;
+  rewardScore: number;
+  active: boolean;
+  completed: boolean;
 }
 
 export interface HospitalFxEvent {
@@ -229,6 +251,9 @@ export interface GameState {
   fxEvents: HospitalFxEvent[];
   objectives: HospitalObjective[];
   objectiveWave: number;
+  hospitalLevel: HospitalLevelState;
+  contracts: HospitalContract[];
+  completedContracts: number;
   treatmentReports: TreatmentReport[];
   dailyReports: DailyReport[];
   facilities: FacilityState;
@@ -268,6 +293,7 @@ export type HospitalAction =
   | { type: 'setPlayerName'; name: string }
   | { type: 'saveScore' }
   | { type: 'clearLeaderboard' }
+  | { type: 'startContract'; contractId: string }
   | { type: 'restart' };
 
 export interface BuildPreview {

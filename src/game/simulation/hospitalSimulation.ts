@@ -8,6 +8,7 @@ import type {
   DifficultyId,
   GameState,
   HospitalAction,
+  HospitalContract,
   HospitalEvent,
   HospitalFxKind,
   HospitalObjective,
@@ -22,6 +23,7 @@ import type {
   StaffState,
   PatientPriority,
   TreatmentGrade,
+  ContractKind,
 } from './types';
 
 const ENTRANCE = { x: 1, y: 7 };
@@ -44,6 +46,7 @@ const CLEANING_COST = 45;
 const STAFF_REST_ENERGY_TARGET = 82;
 const SOOTHE_COST = 32;
 const MAX_WAITING_COMFORT_LEVEL = 3;
+const MAX_ACTIVE_CONTRACTS = 2;
 
 export const DIFFICULTY_DEFINITIONS: Record<DifficultyId, DifficultyDefinition> = {
   cozy: {
@@ -149,6 +152,12 @@ export class HospitalSimulation extends EventTarget {
     if (action.type === 'clearLeaderboard') {
       this.state.leaderboard = clearLeaderboard();
       this.pushEvent(getTranslations(this.state.locale).events.leaderboardCleared, 'neutral');
+      this.emit();
+      return;
+    }
+
+    if (action.type === 'startContract') {
+      this.startContract(action.contractId);
       this.emit();
       return;
     }
@@ -283,6 +292,29 @@ export class HospitalSimulation extends EventTarget {
     });
     this.pushFx('skill', 2.2, 2.2, getTranslations(this.state.locale).fx.scoreSaved);
     this.pushEvent(getTranslations(this.state.locale).events.scoreSaved(score), 'good');
+  }
+
+  private startContract(contractId: string): void {
+    const contract = this.state.contracts.find((candidate) => candidate.id === contractId);
+    if (!contract || contract.completed || contract.active) {
+      return;
+    }
+
+    const activeContracts = this.state.contracts.filter((candidate) => candidate.active && !candidate.completed).length;
+    if (activeContracts >= MAX_ACTIVE_CONTRACTS) {
+      this.pushEvent(getTranslations(this.state.locale).events.contractSlotsFull, 'warning');
+      return;
+    }
+
+    contract.active = true;
+    contract.progress = getContractProgress(this.state, contract);
+    if (contract.progress >= contract.target) {
+      this.completeContract(contract);
+      this.updateObjectiveProgress();
+      return;
+    }
+    this.pushFx('skill', 5, 2.6, getTranslations(this.state.locale).fx.contract);
+    this.pushEvent(getTranslations(this.state.locale).events.contractStarted(getContractTitle(contract.kind, this.state.locale)), 'good');
   }
 
   public update(deltaSeconds: number): void {
@@ -477,6 +509,7 @@ export class HospitalSimulation extends EventTarget {
     this.state.money -= CLEANING_COST;
     room.cleanliness = 100;
     room.cleaningCooldown = 10;
+    this.updateContractProgress();
     this.pushFx('skill', room.gridX + room.width / 2, room.gridY + room.height / 2, getTranslations(this.state.locale).fx.cleaned);
     this.pushEvent(getTranslations(this.state.locale).events.roomCleaned(getRoomText(room, this.state.locale).shortTitle), 'good');
   }
@@ -570,6 +603,7 @@ export class HospitalSimulation extends EventTarget {
 
     staff.skills[skillId] = currentRank + 1;
     staff.skillPoints -= 1;
+    this.updateContractProgress();
     this.pushFx('skill', 2 + this.state.staff.indexOf(staff), 2, definition.icon);
     this.pushEvent(getTranslations(this.state.locale).events.skillTrained(staff.name, getSkillText(skillId, this.state.locale).title, currentRank + 1), 'good');
   }
@@ -765,6 +799,9 @@ export class HospitalSimulation extends EventTarget {
         this.state.reputation = clamp(this.state.reputation + quality.reputationDelta, 0, 100);
         this.state.metrics.treatedToday += 1;
         this.state.metrics.totalTreated += 1;
+        if (patient.priority === 'urgent') {
+          this.state.metrics.urgentTreated += 1;
+        }
         room.patientsTreated += 1;
         room.currentPatientId = undefined;
         this.recordTreatmentReport(patient, room, quality.grade, quality.score, revenue, bonus, streak, stars);
@@ -775,6 +812,8 @@ export class HospitalSimulation extends EventTarget {
         patient.path = createPathToPoint(this.state, patient.x, patient.y, EXIT.x, EXIT.y);
         patient.pathIndex = 0;
         setPatientTargetFromPath(patient);
+        this.awardHospitalXp(quality.score + stars * 14 + Math.round(scoreGain / 12));
+        this.updateContractProgress();
         this.updateObjectiveProgress();
         this.pushFx('heal', patient.x, patient.y, `${'★'.repeat(stars)}|+$${revenue}|+${scoreGain}`);
         if (streak >= 3) {
@@ -914,6 +953,62 @@ export class HospitalSimulation extends EventTarget {
     }
   }
 
+  private awardHospitalXp(amount: number): void {
+    const levelState = this.state.hospitalLevel;
+    levelState.xp += Math.max(0, Math.round(amount));
+    let leveled = false;
+    while (levelState.xp >= levelState.nextXp) {
+      levelState.xp -= levelState.nextXp;
+      levelState.level += 1;
+      levelState.nextXp = getHospitalXpForNextLevel(levelState.level);
+      levelState.title = getHospitalLevelTitle(levelState.level);
+      leveled = true;
+    }
+
+    if (leveled) {
+      const reward = 140 + levelState.level * 35;
+      const scoreReward = 220 + levelState.level * 70;
+      this.state.money += reward;
+      this.state.metrics.score += scoreReward;
+      this.state.metrics.bestScore = Math.max(this.state.metrics.bestScore, this.state.metrics.score, this.state.player.bestScore);
+      this.pushFx('upgrade', 7, 2, `${getTranslations(this.state.locale).fx.hospitalLevel} ${levelState.level}`);
+      this.pushEvent(getTranslations(this.state.locale).events.hospitalLevelUp(levelState.level, reward, scoreReward), 'good');
+      this.updateObjectiveProgress();
+    }
+  }
+
+  private updateContractProgress(): void {
+    let completedAny = false;
+    for (const contract of this.state.contracts) {
+      if (!contract.active || contract.completed) {
+        continue;
+      }
+
+      contract.progress = getContractProgress(this.state, contract);
+      if (contract.progress >= contract.target) {
+        this.completeContract(contract);
+        completedAny = true;
+      }
+    }
+
+    if (completedAny) {
+      this.updateObjectiveProgress();
+    }
+  }
+
+  private completeContract(contract: HospitalContract): void {
+    contract.completed = true;
+    contract.active = false;
+    contract.progress = contract.target;
+    this.state.completedContracts += 1;
+    this.state.money += contract.rewardMoney;
+    this.state.reputation = clamp(this.state.reputation + contract.rewardReputation, 0, 100);
+    this.state.metrics.score += contract.rewardScore;
+    this.awardHospitalXp(70 + contract.rewardScore / 5);
+    this.pushFx('skill', 5.5, 3, `+${contract.rewardScore}`);
+    this.pushEvent(getTranslations(this.state.locale).events.contractComplete(getContractTitle(contract.kind, this.state.locale), contract.rewardScore), 'good');
+  }
+
   private updateObjectiveProgress(): void {
     let completedAny = false;
     const objectivesToCheck = [...this.state.objectives];
@@ -943,6 +1038,9 @@ export class HospitalSimulation extends EventTarget {
     objective.progress = objective.target;
     this.state.money += objective.rewardMoney;
     this.state.reputation = clamp(this.state.reputation + objective.rewardReputation, 0, 100);
+    const objectiveScore = Math.round((objective.rewardMoney + objective.rewardReputation * 45) * getDifficulty(this.state).scoreMultiplier);
+    this.state.metrics.score += objectiveScore;
+    this.awardHospitalXp(90 + objective.wave * 28);
     const title = getObjectiveTitle(objective, this.state.locale);
     this.pushEvent(getTranslations(this.state.locale).events.objectiveComplete(title, objective.rewardMoney, objective.rewardReputation), 'good');
     this.pushFx('skill', 6, 3, getTranslations(this.state.locale).hud.complete);
@@ -961,6 +1059,7 @@ export class HospitalSimulation extends EventTarget {
     }));
 
     this.state.objectives.push(...newObjectives);
+    this.state.contracts.push(...createContracts(this.state.objectiveWave));
     this.pushEvent(getTranslations(this.state.locale).events.objectiveWaveUnlocked(this.state.objectiveWave), 'good');
     this.pushFx('upgrade', 8, 2.5, getTranslations(this.state.locale).fx.newGoals);
   }
@@ -1021,6 +1120,9 @@ export function createInitialState(
     fxEvents: [],
     objectives: createInitialObjectives(),
     objectiveWave: 1,
+    hospitalLevel: createHospitalLevelState(1),
+    contracts: createContracts(1),
+    completedContracts: 0,
     treatmentReports: [],
     dailyReports: [],
     facilities: {
@@ -1033,6 +1135,7 @@ export function createInitialState(
       treatedToday: 0,
       lostToday: 0,
       totalTreated: 0,
+      urgentTreated: 0,
       revenueToday: 0,
       bestQualityToday: 0,
       careStreak: 0,
@@ -1136,6 +1239,16 @@ function createObjectiveWave(wave: number): HospitalObjective[] {
       rewardReputation: 6,
       completed: false,
     },
+    {
+      id: 'reach-900-score',
+      kind: 'reachScore',
+      wave,
+      target: 900,
+      progress: 0,
+      rewardMoney: 180,
+      rewardReputation: 3,
+      completed: false,
+    },
     ];
   }
 
@@ -1179,6 +1292,16 @@ function createObjectiveWave(wave: number): HospitalObjective[] {
         target: 3,
         progress: 0,
         rewardMoney: 280,
+        rewardReputation: 5,
+        completed: false,
+      },
+      {
+        id: 'complete-1-contract',
+        kind: 'completeContracts',
+        wave,
+        target: 1,
+        progress: 0,
+        rewardMoney: 300,
         rewardReputation: 5,
         completed: false,
       },
@@ -1227,6 +1350,16 @@ function createObjectiveWave(wave: number): HospitalObjective[] {
         rewardReputation: 6,
         completed: false,
       },
+      {
+        id: 'treat-3-urgent-pets',
+        kind: 'treatUrgentPets',
+        wave,
+        target: 3,
+        progress: 0,
+        rewardMoney: 360,
+        rewardReputation: 5,
+        completed: false,
+      },
     ];
   }
 
@@ -1273,6 +1406,16 @@ function createObjectiveWave(wave: number): HospitalObjective[] {
       rewardReputation: 4,
       completed: false,
     },
+    {
+      id: `complete-${Math.min(6, wave - 1)}-contracts`,
+      kind: 'completeContracts',
+      wave,
+      target: Math.min(6, wave - 1),
+      progress: 0,
+      rewardMoney: 440 + wave * 90,
+      rewardReputation: 5,
+      completed: false,
+    },
   ];
 }
 
@@ -1298,7 +1441,104 @@ function getObjectiveProgress(state: GameState, objective: HospitalObjective): n
   if (objective.kind === 'earnRevenueToday') {
     return state.metrics.revenueToday;
   }
+  if (objective.kind === 'reachScore') {
+    return Math.round(state.metrics.score);
+  }
+  if (objective.kind === 'treatUrgentPets') {
+    return state.metrics.urgentTreated;
+  }
+  if (objective.kind === 'completeContracts') {
+    return state.completedContracts;
+  }
   return state.staff.length;
+}
+
+function createHospitalLevelState(level: number) {
+  return {
+    level,
+    title: getHospitalLevelTitle(level),
+    xp: 0,
+    nextXp: getHospitalXpForNextLevel(level),
+  };
+}
+
+function createContracts(wave: number): HospitalContract[] {
+  const scale = Math.max(1, wave);
+  const contracts: Array<Omit<HospitalContract, 'progress' | 'active' | 'completed'>> = [
+    {
+      id: `rush-care-${wave}`,
+      kind: 'rushCare',
+      target: 2 + Math.floor(scale / 2),
+      rewardMoney: 160 + scale * 45,
+      rewardReputation: 2 + Math.floor(scale / 3),
+      rewardScore: 420 + scale * 90,
+    },
+    {
+      id: `vip-wellness-${wave}`,
+      kind: 'vipWellness',
+      target: 1 + Math.floor(scale / 3),
+      rewardMoney: 220 + scale * 55,
+      rewardReputation: 3 + Math.floor(scale / 3),
+      rewardScore: 520 + scale * 110,
+    },
+    {
+      id: `clean-shift-${wave}`,
+      kind: 'cleanShift',
+      target: 1 + Math.floor(scale / 2),
+      rewardMoney: 130 + scale * 40,
+      rewardReputation: 2,
+      rewardScore: 360 + scale * 80,
+    },
+    {
+      id: `training-day-${wave}`,
+      kind: 'trainingDay',
+      target: 1 + Math.floor(scale / 3),
+      rewardMoney: 150 + scale * 42,
+      rewardReputation: 2,
+      rewardScore: 380 + scale * 95,
+    },
+  ];
+
+  return contracts.map((contract) => ({
+    ...contract,
+    progress: 0,
+    active: false,
+    completed: false,
+  }));
+}
+
+function getContractProgress(state: GameState, contract: HospitalContract): number {
+  if (contract.kind === 'rushCare') {
+    return state.metrics.urgentTreated;
+  }
+  if (contract.kind === 'vipWellness') {
+    return state.treatmentReports.filter((report) => report.grade === 'excellent' && report.stars >= 4).length;
+  }
+  if (contract.kind === 'cleanShift') {
+    return state.rooms.filter((room) => room.cleanliness >= 92).length;
+  }
+  return state.staff.reduce((total, staff) => total + Object.values(staff.skills).reduce((sum, rank) => sum + (rank ?? 0), 0), 0);
+}
+
+function getHospitalXpForNextLevel(level: number): number {
+  return 520 + level * 260;
+}
+
+function getHospitalLevelTitle(level: number): string {
+  if (level >= 8) {
+    return 'Regional Care Hub';
+  }
+  if (level >= 5) {
+    return 'Specialist Hospital';
+  }
+  if (level >= 3) {
+    return 'Growing Clinic';
+  }
+  return 'Starter Clinic';
+}
+
+export function getContractTitle(kind: ContractKind, locale: Locale): string {
+  return getTranslations(locale).contracts[kind].title;
 }
 
 function calculateTreatmentQuality(patient: PatientState, room: RoomState, staff: StaffState | undefined, difficulty: DifficultyId): { grade: TreatmentGrade; score: number; bonusRate: number; reputationDelta: number } {

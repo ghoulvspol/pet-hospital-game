@@ -50,7 +50,20 @@
 
 切换难度会开启一局新的经营，保留玩家档案和排行榜，但重置当前医院状态。
 
-### 6. 房间类型
+### 6. 医院等级与任务合约
+
+医院等级会随着治疗表现、积分奖励和合约完成获得 XP。升级医院会带来额外资金和积分奖励，让长期经营不只依赖每日收入。
+
+左侧“任务合约”提供可选挑战。一次最多同时进行两个合约，完成后获得现金、口碑、医院 XP 和积分奖励。合约类型包括：
+
+- 高峰护理演练：治疗急诊宠物，考验高压调度。
+- 贵宾健康计划：交付优秀星级护理，适合追求高质量路线。
+- 清洁班次审计：保持房间清洁，奖励稳定运营。
+- 员工训练日：投入技能等级，强化团队成长。
+
+合约会随着章节推进持续刷新，是冲击排行榜和专家难度的重要积分来源。
+
+### 7. 房间类型
 
 | 房间 | 英文名 | 适合病例 | 特点 |
 | --- | --- | --- | --- |
@@ -61,7 +74,7 @@
 
 建议开局优先补齐基础诊室，再根据队列中“Needs / 需要”的房间需求扩建。
 
-### 7. 宠物与优先级
+### 8. 宠物与优先级
 
 宠物患者会带着不同病例来到医院，并拥有耐心值。等待越久，耐心越低；耐心耗尽后患者会离开，影响当日表现。
 
@@ -76,7 +89,7 @@
 - 安抚宠物：花费资金恢复部分耐心。
 - 优先分诊：为重要患者添加优先标记，让其在队列排序中更靠前。
 
-### 8. 员工系统
+### 9. 员工系统
 
 员工拥有角色、专长、精力、等级、经验和技能点。
 
@@ -88,7 +101,7 @@
 
 员工会在治疗后获得经验，升级后得到技能点。精力过低时效率会受影响，需要送去休息室恢复。
 
-### 9. 技能树
+### 10. 技能树
 
 | 技能 | 英文名 | 效果 |
 | --- | --- | --- |
@@ -99,13 +112,13 @@
 
 建议早期优先点“快速诊断”和“温柔双手”，中后期再强化清洁与路线效率。
 
-### 10. 房间升级与清洁
+### 11. 房间升级与清洁
 
 房间最高可升级到 3 级。升级通常能提升治疗吞吐和收益，并重置清洁度。
 
 清洁度会随使用下降。清洁度过低时，地图上会出现风险标记，治疗表现和运营稳定性都会受到影响。可以在房间检查面板中执行“清洁房间”。
 
-### 11. 护理策略
+### 12. 护理策略
 
 每个房间可以设置护理策略：
 
@@ -115,13 +128,13 @@
 
 如果队列变长，切换到快速策略；如果追求高评分和连胜，使用舒适策略。
 
-### 12. 候诊舒适度
+### 13. 候诊舒适度
 
 候诊舒适度是全局设施升级。提升后，等待中的宠物耐心下降更慢，更适合应对高峰期和复杂病例。
 
 当目标要求提升候诊体验，或经常出现排队风险时，应优先升级候诊舒适度。
 
-### 13. 运营预警
+### 14. 运营预警
 
 左侧运营卡片会提醒关键风险：
 
@@ -131,7 +144,7 @@
 
 地图上也会出现可视化提示，例如低清洁度百分比、员工疲劳感叹号、休息中的 Z 标记等。
 
-### 14. 阶段目标与报告
+### 15. 阶段目标与报告
 
 游戏会持续生成阶段目标，例如：
 
@@ -148,7 +161,7 @@
 
 治疗报告会展示评分、星级、收入、奖金和护理策略；每日报告会总结当天治疗数、流失数、收入、最佳质量和声誉。
 
-### 15. 操作方式
+### 16. 操作方式
 
 | 操作 | 说明 |
 | --- | --- |
@@ -163,7 +176,7 @@
 | `4` | 选择阳光恢复病房。 |
 | `中文 / English` | 切换中文和英文界面。 |
 
-### 16. 新手建议
+### 17. 新手建议
 
 - 开局先保证至少有一个诊室，再观察队列需求补房间。
 - 不要一次性花光资金，保留清洁、安抚和雇佣预算。
@@ -172,7 +185,7 @@
 - 房间清洁低于风险线时优先处理，避免收益和质量下滑。
 - 目标推荐的房间通常是当前最值得建设的选择。
 
-### 17. 技术结构
+### 18. 技术结构
 
 当前项目采用 Phaser、TypeScript 和 Vite：
 
@@ -236,7 +249,20 @@ The leaderboard is local-only through `localStorage`; no backend service is requ
 
 Changing difficulty starts a fresh run while preserving the player profile and leaderboard.
 
-### 6. Room Types
+### 6. Hospital Levels and Mission Contracts
+
+The hospital earns XP from strong treatment results, score rewards, and completed contracts. Leveling up grants extra cash and score, making long-term clinic growth meaningful beyond daily income.
+
+The left-side contract panel offers optional challenges. Up to two contracts can be active at once. Completing one grants money, reputation, hospital XP, and score. Contract types include:
+
+- Rush Care Drill: treat urgent pets and prove high-pressure readiness.
+- VIP Wellness Plan: deliver excellent high-star care for premium visitors.
+- Clean Shift Audit: keep rooms sparkling for stable operations.
+- Training Day: invest skill ranks into the care team.
+
+Contracts refresh as chapters advance and are a major score source for leaderboard runs and Expert difficulty.
+
+### 7. Room Types
 
 | Room | Best For | Notes |
 | --- | --- | --- |
@@ -247,7 +273,7 @@ Changing difficulty starts a fresh run while preserving the player profile and l
 
 A good opening is to secure basic exam coverage first, then expand based on the queue’s “Needs” labels.
 
-### 7. Pets and Priorities
+### 8. Pets and Priorities
 
 Each pet arrives with a case, required room, priority, and patience timer. If patience reaches zero, the pet leaves and your daily performance suffers.
 
@@ -262,7 +288,7 @@ Available patient actions:
 - Soothe Pet: Spend money to restore patience.
 - Priority Triage: Mark an important pet so it moves ahead in queue sorting.
 
-### 8. Staff System
+### 9. Staff System
 
 Staff have roles, specialties, energy, levels, XP, skill points, and trained skills.
 
@@ -274,7 +300,7 @@ Roles include:
 
 Staff gain XP from treatments and earn skill points on level-up. Low-energy staff should rest in the lounge before they become an operational risk.
 
-### 9. Skill Tree
+### 10. Skill Tree
 
 | Skill | Effect |
 | --- | --- |
@@ -285,13 +311,13 @@ Staff gain XP from treatments and earn skill points on level-up. Low-energy staf
 
 Early upgrades in Fast Diagnosis and Calm Hands are usually the safest first investments.
 
-### 10. Room Upgrades and Cleaning
+### 11. Room Upgrades and Cleaning
 
 Rooms can be upgraded up to level 3. Upgrades improve throughput and payouts, and also refresh cleanliness.
 
 Cleanliness drops as rooms are used. Dirty rooms show risk markers and can hurt operating stability. Use the room inspector to clean rooms when cleanliness gets low.
 
-### 11. Care Policies
+### 12. Care Policies
 
 Each room can use one of three care policies:
 
@@ -301,13 +327,13 @@ Each room can use one of three care policies:
 
 Switch to Express during rush periods, and use Comfort when chasing high grades or care streaks.
 
-### 12. Waiting Comfort
+### 13. Waiting Comfort
 
 Waiting comfort is a global facility upgrade. Higher comfort slows patience loss while pets wait, making the hospital more resilient during rush hour.
 
 Upgrade it when objectives request it or when queue-risk warnings appear often.
 
-### 13. Operations Watch
+### 14. Operations Watch
 
 The operations card highlights urgent problems:
 
@@ -317,7 +343,7 @@ The operations card highlights urgent problems:
 
 The map also shows visual markers such as cleanliness percentages, red tired-staff alerts, and resting indicators.
 
-### 14. Objectives and Reports
+### 15. Objectives and Reports
 
 Dynamic objectives may ask you to:
 
@@ -334,7 +360,7 @@ Completing objectives grants money and reputation, then advances the chapter wav
 
 Treatment reports show grade, stars, revenue, bonus, and care policy. Daily reports summarize treated pets, lost pets, revenue, best quality, and reputation.
 
-### 15. Controls
+### 16. Controls
 
 | Input | Action |
 | --- | --- |
@@ -349,7 +375,7 @@ Treatment reports show grade, stars, revenue, bonus, and care policy. Daily repo
 | `4` | Select Sunny Recovery Ward. |
 | `中文 / English` | Switch interface language. |
 
-### 16. Beginner Tips
+### 17. Beginner Tips
 
 - Start with exam coverage, then build around queue demand.
 - Keep reserve money for cleaning, soothing, and hiring.
@@ -358,7 +384,7 @@ Treatment reports show grade, stars, revenue, bonus, and care policy. Daily repo
 - Clean risky rooms before quality and income suffer.
 - Follow the recommended build highlight when unsure what to build next.
 
-### 17. Technical Structure
+### 18. Technical Structure
 
 The project uses Phaser, TypeScript, and Vite:
 

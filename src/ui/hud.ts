@@ -1,5 +1,5 @@
 import { ILLNESSES, MAX_ROOM_LEVEL, ROOM_DEFINITIONS, SKILL_DEFINITIONS, SKILL_ORDER } from '../game/simulation/content';
-import { DIFFICULTY_DEFINITIONS, getIllness, getRoomUpgradeCost, getSkillRank, getStaffXpForNextLevel, getWaitingComfortUpgradeCost, type HospitalSimulation } from '../game/simulation/hospitalSimulation';
+import { DIFFICULTY_DEFINITIONS, getContractTitle, getIllness, getRoomUpgradeCost, getSkillRank, getStaffXpForNextLevel, getWaitingComfortUpgradeCost, type HospitalSimulation } from '../game/simulation/hospitalSimulation';
 import type { CarePolicy, DailyReport, DifficultyId, GameState, HospitalObjective, Locale, PatientState, RoomKind, RoomState, SkillId, StaffState, TreatmentReport } from '../game/simulation/types';
 import { getIllnessTitle, getObjectiveTitle, getRoomText, getSkillText, getTranslations } from '../i18n/translations';
 
@@ -259,6 +259,14 @@ export class HospitalHud {
       return;
     }
 
+    if (actionName === 'start-contract') {
+      const contractId = action.dataset.contractId;
+      if (contractId) {
+        this.simulation.dispatch({ type: 'startContract', contractId });
+      }
+      return;
+    }
+
     if (actionName === 'hire-staff') {
       this.simulation.dispatch({ type: 'hireStaff' });
       return;
@@ -381,6 +389,7 @@ export class HospitalHud {
     return [
       action.dataset.action ?? '',
       action.dataset.roomId ?? '',
+      action.dataset.contractId ?? '',
       action.dataset.staffId ?? '',
       action.dataset.patientId ?? '',
       action.dataset.kind ?? '',
@@ -445,6 +454,7 @@ export class HospitalHud {
           </div>
           ${this.renderPressureMeter()}
           ${this.renderPlayerProgress()}
+          ${this.renderHospitalLevel()}
           ${this.renderDifficultyControls()}
           ${this.renderLeaderboard()}
           ${this.renderOperationsWatch()}
@@ -461,6 +471,7 @@ export class HospitalHud {
           <div class="objective-list">
             ${this.renderObjectives()}
           </div>
+          ${this.renderContracts()}
           <div class="panel-heading compact staff-heading">
             <span>${text.hud.staff}</span>
             <button class="mini-button" data-action="hire-staff">${text.actions.hire} $${this.hireCost()}</button>
@@ -623,6 +634,22 @@ export class HospitalHud {
     `;
   }
 
+  private renderHospitalLevel(): string {
+    const text = getTranslations(this.state.locale);
+    const level = this.state.hospitalLevel;
+    const ratio = Math.min(100, Math.round((level.xp / level.nextXp) * 100));
+    return `
+      <div class="progress-card level-card">
+        <span>
+          <strong>${text.hud.hospitalLevel} ${level.level}</strong>
+          <small>${level.title}</small>
+        </span>
+        <i class="level-meter" style="--level:${ratio}%"></i>
+        <small>${level.xp}/${level.nextXp} XP · ${text.hud.contracts}: ${this.state.completedContracts}</small>
+      </div>
+    `;
+  }
+
   private renderDifficultyControls(): string {
     const text = getTranslations(this.state.locale);
     const difficulties = Object.keys(DIFFICULTY_DEFINITIONS) as DifficultyId[];
@@ -660,6 +687,44 @@ export class HospitalHud {
             <strong>${Math.round(entry.score)}</strong>
           </div>
         `).join('')}
+      </div>
+    `;
+  }
+
+  private renderContracts(): string {
+    const text = getTranslations(this.state.locale);
+    const visibleContracts = this.state.contracts
+      .filter((contract) => !contract.completed)
+      .sort((left, right) => Number(right.active) - Number(left.active))
+      .slice(0, 4);
+    if (visibleContracts.length === 0) {
+      return '';
+    }
+
+    return `
+      <div class="panel-heading compact">
+        <span>${text.hud.contracts}</span>
+        <strong>${this.state.contracts.filter((contract) => contract.active && !contract.completed).length}/${2}</strong>
+      </div>
+      <div class="contract-list">
+        ${visibleContracts.map((contract) => {
+          const ratio = Math.min(100, Math.round((contract.progress / contract.target) * 100));
+          const title = getContractTitle(contract.kind, this.state.locale);
+          const description = text.contracts[contract.kind].description;
+          return `
+            <div class="contract-card ${contract.active ? 'active' : ''}">
+              <div>
+                <em>${contract.active ? text.hud.activeContracts : text.hud.availableContracts}</em>
+                <strong>${title}</strong>
+                <small>${description}</small>
+                <small>${text.hud.contractReward}: $${contract.rewardMoney} · +${contract.rewardReputation}% · +${contract.rewardScore}</small>
+              </div>
+              <span>${Math.min(contract.progress, contract.target)}/${contract.target}</span>
+              <i style="--contract:${ratio}%"></i>
+              ${contract.active ? '' : `<button class="mini-button" data-action="start-contract" data-contract-id="${contract.id}">${text.actions.startContract}</button>`}
+            </div>
+          `;
+        }).join('')}
       </div>
     `;
   }

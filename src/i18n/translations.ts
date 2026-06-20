@@ -1,4 +1,4 @@
-import type { CarePolicy, HospitalObjective, IllnessDefinition, Locale, DifficultyId, PatientPriority, PatientStatus, PetKind, RoomDefinition, RoomKind, SkillId, StaffRole, TreatmentGrade } from '../game/simulation/types';
+import type { CarePolicy, ContractKind, HospitalObjective, IllnessDefinition, Locale, DifficultyId, PatientPriority, PatientStatus, PetKind, RoomDefinition, RoomKind, SkillId, StaffRole, TreatmentGrade } from '../game/simulation/types';
 
 export const DEFAULT_LOCALE: Locale = 'en';
 
@@ -37,6 +37,7 @@ export interface TranslationBundle {
     saveScore: string;
     clearLeaderboard: string;
     renamePlayer: string;
+    startContract: string;
   };
   disabledReasons: {
     notEnoughMoney: (amount: number) => string;
@@ -137,6 +138,11 @@ export interface TranslationBundle {
     runs: string;
     rank: string;
     noScores: string;
+    hospitalLevel: string;
+    contracts: string;
+    activeContracts: string;
+    availableContracts: string;
+    contractReward: string;
   };
   tutorial: {
     title: string;
@@ -203,6 +209,10 @@ export interface TranslationBundle {
     scoreSaved: (score: number) => string;
     scoreTooLow: string;
     leaderboardCleared: string;
+    contractStarted: (contract: string) => string;
+    contractComplete: (contract: string, score: number) => string;
+    contractSlotsFull: string;
+    hospitalLevelUp: (level: number, money: number, score: number) => string;
   };
   fx: {
     roomBuilt: string;
@@ -221,11 +231,14 @@ export interface TranslationBundle {
     comfort: string;
     newGoals: string;
     scoreSaved: string;
+    contract: string;
+    hospitalLevel: string;
     roomLevel: (level: number) => string;
   };
   objectives: {
     title: (objective: HospitalObjective, roomName?: string) => string;
   };
+  contracts: Record<ContractKind, LocalizedSkillText>;
   grades: Record<TreatmentGrade, string>;
   priorities: Record<PatientPriority, string>;
   difficulties: Record<DifficultyId, LocalizedSkillText & { shortTitle: string }>;
@@ -257,6 +270,7 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       saveScore: 'Save Score',
       clearLeaderboard: 'Clear Board',
       renamePlayer: 'Rename',
+      startContract: 'Start',
     },
     disabledReasons: {
       notEnoughMoney: (amount) => `Need $${amount}`,
@@ -357,6 +371,11 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       runs: 'Runs',
       rank: 'Rank',
       noScores: 'Save a run to start the board.',
+      hospitalLevel: 'Hospital Level',
+      contracts: 'Contracts',
+      activeContracts: 'Active Contracts',
+      availableContracts: 'Available Contracts',
+      contractReward: 'Reward',
     },
     tutorial: {
       title: 'Grow your pet hospital',
@@ -485,6 +504,10 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       scoreSaved: (score) => `Score ${score} saved to the leaderboard.`,
       scoreTooLow: 'Treat at least one pet before saving a score.',
       leaderboardCleared: 'Local leaderboard cleared.',
+      contractStarted: (contract) => `${contract} contract accepted.`,
+      contractComplete: (contract, score) => `${contract} completed. Bonus score +${score}.`,
+      contractSlotsFull: 'Finish an active contract before accepting another.',
+      hospitalLevelUp: (level, money, score) => `Hospital reached level ${level}. Bonus: $${money} and +${score} score.`,
     },
     fx: {
       roomBuilt: '+ room',
@@ -503,6 +526,8 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       comfort: 'comfort',
       newGoals: 'new goals',
       scoreSaved: 'saved',
+      contract: 'contract',
+      hospitalLevel: 'clinic up',
       roomLevel: (level) => `Lv ${level}`,
     },
     objectives: {
@@ -528,7 +553,34 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
         if (objective.kind === 'earnRevenueToday') {
           return `Earn $${objective.target} in one day`;
         }
+        if (objective.kind === 'reachScore') {
+          return `Reach ${objective.target} score`;
+        }
+        if (objective.kind === 'treatUrgentPets') {
+          return `Treat ${objective.target} urgent pets`;
+        }
+        if (objective.kind === 'completeContracts') {
+          return `Complete ${objective.target} contracts`;
+        }
         return `Hire ${objective.target} staff`;
+      },
+    },
+    contracts: {
+      rushCare: {
+        title: 'Rush Care Drill',
+        description: 'Treat urgent pets to prove high-pressure readiness.',
+      },
+      vipWellness: {
+        title: 'VIP Wellness Plan',
+        description: 'Deliver excellent high-star care for premium visitors.',
+      },
+      cleanShift: {
+        title: 'Clean Shift Audit',
+        description: 'Keep rooms sparkling for an inspection bonus.',
+      },
+      trainingDay: {
+        title: 'Training Day',
+        description: 'Invest skill ranks into the care team.',
       },
     },
     difficulties: {
@@ -600,6 +652,7 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       saveScore: '保存积分',
       clearLeaderboard: '清空榜单',
       renamePlayer: '改名',
+      startContract: '开始',
     },
     disabledReasons: {
       notEnoughMoney: (amount) => `还需要 $${amount}`,
@@ -700,6 +753,11 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       runs: '局数',
       rank: '排名',
       noScores: '保存一次经营积分后上榜。',
+      hospitalLevel: '医院等级',
+      contracts: '任务合约',
+      activeContracts: '进行中合约',
+      availableContracts: '可接合约',
+      contractReward: '奖励',
     },
     tutorial: {
       title: '扩建你的宠物医院',
@@ -828,6 +886,10 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       scoreSaved: (score) => `积分 ${score} 已保存到排行榜。`,
       scoreTooLow: '至少治疗一只宠物后才能保存积分。',
       leaderboardCleared: '本地排行榜已清空。',
+      contractStarted: (contract) => `${contract} 合约已接受。`,
+      contractComplete: (contract, score) => `${contract} 已完成。额外积分 +${score}。`,
+      contractSlotsFull: '请先完成一个进行中的合约，再接受新合约。',
+      hospitalLevelUp: (level, money, score) => `医院升到 ${level} 级。奖励：$${money} 和 +${score} 积分。`,
     },
     fx: {
       roomBuilt: '+ 房间',
@@ -846,6 +908,8 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       comfort: '舒适',
       newGoals: '新目标',
       scoreSaved: '已保存',
+      contract: '合约',
+      hospitalLevel: '医院升级',
       roomLevel: (level) => `${level}级`,
     },
     objectives: {
@@ -871,7 +935,34 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
         if (objective.kind === 'earnRevenueToday') {
           return `单日收入达到 $${objective.target}`;
         }
+        if (objective.kind === 'reachScore') {
+          return `积分达到 ${objective.target}`;
+        }
+        if (objective.kind === 'treatUrgentPets') {
+          return `治疗 ${objective.target} 只急诊宠物`;
+        }
+        if (objective.kind === 'completeContracts') {
+          return `完成 ${objective.target} 个任务合约`;
+        }
         return `雇佣 ${objective.target} 名员工`;
+      },
+    },
+    contracts: {
+      rushCare: {
+        title: '高峰护理演练',
+        description: '治疗急诊宠物，证明高压调度能力。',
+      },
+      vipWellness: {
+        title: '贵宾健康计划',
+        description: '为高价值访客提供优秀星级护理。',
+      },
+      cleanShift: {
+        title: '清洁班次审计',
+        description: '保持房间闪亮，通过检查获得奖励。',
+      },
+      trainingDay: {
+        title: '员工训练日',
+        description: '投入技能等级，强化护理团队。',
       },
     },
     difficulties: {

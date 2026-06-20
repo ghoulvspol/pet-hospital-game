@@ -410,6 +410,79 @@ h1 {
   text-overflow: ellipsis;
 }
 
+.level-meter,
+.contract-card > i {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(18, 56, 50, 0.1);
+}
+
+.level-meter::after,
+.contract-card > i::after {
+  display: block;
+  width: var(--level, var(--contract));
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8b5cf6, #25b981);
+  content: '';
+}
+
+.contract-list {
+  display: grid;
+  gap: 8px;
+}
+
+.contract-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 8px;
+  padding: 9px 10px;
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(49, 84, 78, 0.08);
+}
+
+.contract-card.active {
+  background: linear-gradient(135deg, rgba(213, 255, 236, 0.78), rgba(255, 255, 255, 0.66));
+  box-shadow: inset 3px 0 0 var(--green), inset 0 0 0 1px rgba(37, 185, 129, 0.14);
+}
+
+.contract-card div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.contract-card em {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.contract-card strong {
+  font-size: 12px;
+}
+
+.contract-card small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.contract-card > span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.contract-card > i,
+.contract-card > button {
+  grid-column: 1 / -1;
+}
+
 .pressure-card > i,
 .arrival-card > i {
   position: absolute;
