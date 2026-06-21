@@ -378,6 +378,58 @@ h1 {
   width: 100%;
 }
 
+.map-card {
+  gap: 9px;
+}
+
+.map-list {
+  display: grid;
+  gap: 8px;
+}
+
+.map-node {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.48);
+  box-shadow: inset 0 0 0 1px rgba(49, 84, 78, 0.08);
+}
+
+.map-node.active {
+  background: linear-gradient(135deg, rgba(213, 255, 236, 0.82), rgba(255, 255, 255, 0.62));
+  box-shadow: inset 3px 0 0 var(--green), inset 0 0 0 1px rgba(37, 185, 129, 0.14);
+}
+
+.map-node.locked {
+  opacity: 0.66;
+}
+
+.map-node span {
+  align-items: flex-start;
+}
+
+.map-node strong {
+  font-size: 12px;
+}
+
+.map-node em,
+.map-node b {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.map-node.active b {
+  color: var(--green-dark);
+}
+
+.map-node .mini-button {
+  width: 100%;
+}
+
 .leaderboard-card {
   gap: 7px;
 }

@@ -14,6 +14,7 @@ PetCare Tycoon is an original bilingual pet hospital management game prototype b
 - Management loop: build rooms, hire staff, assign work, treat pets, earn cash, and expand capacity.
 - Local player profile, score saving, and leaderboard tracking through browser storage.
 - Difficulty modes: Cozy, Classic, and Expert adjust starting money, arrivals, patience, upkeep, pressure, and score multipliers.
+- Chapter maps: unlock Garden Clinic, Downtown Rescue, Beachside Spa, and Mountain Emergency layouts with escalating pressure, urgency, upkeep, and rewards.
 - Hospital level progression adds XP, level-up rewards, and longer-term clinic growth milestones.
 - Optional mission contracts add side objectives such as rush care, VIP wellness, clean-shift audits, and staff training days.
 - Room systems: exam, treatment, pharmacy, and grooming rooms with upgrades to level 3.
@@ -79,6 +80,7 @@ npm run preview
 - Use `中文` / `English` in the top bar to switch language.
 - Use the left player card to rename the local profile, save the current score, and manage the local leaderboard.
 - Choose Cozy, Classic, or Expert difficulty from the left panel; changing difficulty starts a fresh run with new pressure and scoring rules.
+- Use the Chapter Map card to enter unlocked maps; each map starts a fresh branch run with a different layout and higher challenge multipliers.
 - Start mission contracts from the left panel to chase extra cash, reputation, hospital XP, and score rewards.
 - Restart from the HUD when you want to begin a fresh run.
 
@@ -112,7 +114,7 @@ npm run test:performance
 What the checks cover:
 
 - `test:actions` audits HUD `data-action` handlers against real-click coverage.
-- `test:clicks` runs real Chrome click flows for room building, room inspection, staff assignment, player rename, difficulty selection, contract start/completion, score saving, leaderboard clearing, pause, restart, and upgrades.
+- `test:clicks` runs real Chrome click flows for room building, room inspection, staff assignment, player rename, difficulty selection, chapter map selection, contract start/completion, score saving, leaderboard clearing, pause, restart, and upgrades.
 - `test:responsive` verifies mobile and tablet layouts, scrolling, overflow, and key controls.
 - `test:long-run` advances multiple in-game days and checks reports and economy behavior.
 - `test:stress` validates debt, dirty rooms, lost pets, tired staff, and warning states.

@@ -1,6 +1,6 @@
-import { ILLNESSES, MAX_ROOM_LEVEL, ROOM_DEFINITIONS, SKILL_DEFINITIONS, SKILL_ORDER } from '../game/simulation/content';
-import { DIFFICULTY_DEFINITIONS, getContractTitle, getIllness, getRoomUpgradeCost, getSkillRank, getStaffXpForNextLevel, getWaitingComfortUpgradeCost, type HospitalSimulation } from '../game/simulation/hospitalSimulation';
-import type { CarePolicy, DailyReport, DifficultyId, GameState, HospitalObjective, Locale, PatientState, RoomKind, RoomState, SkillId, StaffState, TreatmentReport } from '../game/simulation/types';
+import { ILLNESSES, MAP_DEFINITIONS, MAP_ORDER, MAX_ROOM_LEVEL, ROOM_DEFINITIONS, SKILL_DEFINITIONS, SKILL_ORDER } from '../game/simulation/content';
+import { DIFFICULTY_DEFINITIONS, getContractTitle, getIllness, getMapText, getRoomUpgradeCost, getSkillRank, getStaffXpForNextLevel, getWaitingComfortUpgradeCost, type HospitalSimulation } from '../game/simulation/hospitalSimulation';
+import type { CarePolicy, DailyReport, DifficultyId, GameState, HospitalObjective, Locale, MapId, PatientState, RoomKind, RoomState, SkillId, StaffState, TreatmentReport } from '../game/simulation/types';
 import { getIllnessTitle, getObjectiveTitle, getRoomText, getSkillText, getTranslations } from '../i18n/translations';
 
 export class HospitalHud {
@@ -241,6 +241,14 @@ export class HospitalHud {
       return;
     }
 
+    if (actionName === 'select-map') {
+      const mapId = action.dataset.mapId as MapId | undefined;
+      if (mapId) {
+        this.simulation.dispatch({ type: 'selectMap', mapId });
+      }
+      return;
+    }
+
     if (actionName === 'rename-player') {
       const name = window.prompt(getTranslations(this.state.locale).hud.player, this.state.player.name);
       if (name !== null) {
@@ -455,6 +463,7 @@ export class HospitalHud {
           ${this.renderPressureMeter()}
           ${this.renderPlayerProgress()}
           ${this.renderHospitalLevel()}
+          ${this.renderChapterMap()}
           ${this.renderDifficultyControls()}
           ${this.renderLeaderboard()}
           ${this.renderOperationsWatch()}
@@ -646,6 +655,38 @@ export class HospitalHud {
         </span>
         <i class="level-meter" style="--level:${ratio}%"></i>
         <small>${level.xp}/${level.nextXp} XP · ${text.hud.contracts}: ${this.state.completedContracts}</small>
+      </div>
+    `;
+  }
+
+  private renderChapterMap(): string {
+    const text = getTranslations(this.state.locale);
+    const activeMapId = this.state.mapProgress.activeMapId;
+    return `
+      <div class="progress-card map-card">
+        <span>
+          <strong>${text.hud.mapChapter}</strong>
+          <small>${text.hud.goalWave} ${this.state.objectiveWave} · ${text.hud.level} ${this.state.hospitalLevel.level}</small>
+        </span>
+        <div class="map-list">
+          ${MAP_ORDER.map((mapId) => {
+            const definition = MAP_DEFINITIONS[mapId];
+            const mapText = getMapText(mapId, this.state.locale);
+            const isUnlocked = this.state.mapProgress.unlockedMapIds.includes(mapId);
+            const isActive = activeMapId === mapId;
+            return `
+              <div class="map-node ${isActive ? 'active' : ''} ${isUnlocked ? 'unlocked' : 'locked'}">
+                <span>
+                  <strong>${definition.chapter}. ${mapText.title}</strong>
+                  <small>${mapText.subtitle}</small>
+                </span>
+                <small>${mapText.description}</small>
+                <em>${text.hud.mapPressure} ×${definition.pressureMultiplier.toFixed(2)} · ${text.hud.mapRevenue} ×${definition.revenueMultiplier.toFixed(2)} · ${text.hud.mapUrgency} +${Math.round(definition.urgentBias * 100)}%</em>
+                ${isActive ? `<b>${text.hud.mapActive}</b>` : isUnlocked ? `<button class="mini-button" data-action="select-map" data-map-id="${mapId}">${text.hud.mapSelect}</button>` : `<b>${text.hud.mapLocked}</b><small>${text.hud.mapUnlocksAt(definition.unlockWave)}</small>`}
+              </div>
+            `;
+          }).join('')}
+        </div>
       </div>
     `;
   }

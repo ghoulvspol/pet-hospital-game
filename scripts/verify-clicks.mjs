@@ -143,6 +143,26 @@ try {
   assert(completedContract.log.includes('contract') || completedContract.log.includes('合约'), 'contract completion writes a log event');
   mark('contract completion rewards');
 
+  await prepareMapSelectionScenario(evaluate);
+  await clickElement(evaluate, click, '[data-action="select-map"][data-map-id="downtownRescue"]', devtools);
+  const selectedMap = await evaluate(`(() => {
+    const state = window.petHospitalTest?.simulation.getState();
+    return {
+      mapId: state?.mapProgress.activeMapId ?? '',
+      day: state?.day ?? 0,
+      rooms: state?.rooms.map((room) => room.kind).join(',') ?? '',
+      activeText: document.querySelector('.map-card .map-node.active')?.textContent ?? '',
+      canvas: Boolean(document.querySelector('canvas')),
+    };
+  })()`);
+  assert(selectedMap.mapId === 'downtownRescue', 'map selection click switches active map');
+  assert(selectedMap.day === 1, 'map selection starts a fresh run');
+  assert(selectedMap.rooms.includes('grooming'), 'downtown map starts with its own room layout');
+  assert(selectedMap.activeText.includes('Downtown') || selectedMap.activeText.includes('市中心'), 'chapter map card marks downtown active');
+  assert(selectedMap.canvas, 'canvas remains mounted after map switch');
+  mark('chapter map selection');
+  await evaluate(`window.petHospitalTest?.simulation.dispatch({ type: 'selectMap', mapId: 'gardenClinic' })`);
+
   await evaluate(`window.petHospitalTest?.simulation.dispatch({ type: 'setPaused', paused: false })`);
 
   await clickElement(evaluate, click, '[data-action="toggle-pause"]', devtools);
@@ -562,6 +582,23 @@ async function prepareContractCompletionScenario(evaluate) {
     return true;
   })()`);
   assert(prepared, 'test mode exposes simulation for contract completion scenario');
+}
+
+async function prepareMapSelectionScenario(evaluate) {
+  const prepared = await evaluate(`(() => {
+    const simulation = window.petHospitalTest?.simulation;
+    if (!simulation) return false;
+    const state = simulation.getState();
+    state.paused = true;
+    state.mapProgress = {
+      activeMapId: 'gardenClinic',
+      highestUnlockedChapter: 2,
+      unlockedMapIds: ['gardenClinic', 'downtownRescue'],
+    };
+    simulation.dispatch({ type: 'setPaused', paused: true });
+    return true;
+  })()`);
+  assert(prepared, 'test mode exposes simulation for map selection scenario');
 }
 
 async function verifyAllRoomKindsCanBuild(evaluate, click, canvas, devtools) {

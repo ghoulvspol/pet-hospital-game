@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
-import { ROOM_DEFINITIONS } from '../../game/simulation/content';
+import { MAP_DEFINITIONS, ROOM_DEFINITIONS } from '../../game/simulation/content';
 import type { HospitalSimulation } from '../../game/simulation/hospitalSimulation';
-import type { CarePolicy, GameState, HospitalFxEvent, PatientState, RoomState, StaffState } from '../../game/simulation/types';
+import type { CarePolicy, GameState, HospitalFxEvent, MapDefinition, PatientPathStep, PatientState, RoomState, StaffState } from '../../game/simulation/types';
 import { getRoomText, getTranslations } from '../../i18n/translations';
 import { FX_ASSET_KEYS, PET_ASSET_KEYS, PET_WALK_ASSET_KEYS, ROOM_EQUIPMENT_ASSET_KEYS, STAFF_ASSET_KEYS, TILE_ASSET_KEYS, preloadPixelAssets } from '../assets/manifest';
 import { registerPixelArt } from '../assets/pixelArt';
@@ -71,10 +71,12 @@ export class HospitalScene extends Phaser.Scene {
   private receptionSign?: Phaser.GameObjects.Text;
   private rushBanner?: Phaser.GameObjects.Text;
   private entrancePulse?: Phaser.GameObjects.Ellipse;
+  private worldLayer?: Phaser.GameObjects.Container;
   private stateListener?: () => void;
   private state!: GameState;
   private hoverTile?: { gridX: number; gridY: number };
   private lastClockSecond = -1;
+  private renderedMapId?: string;
 
   public constructor(simulation?: HospitalSimulation) {
     super('HospitalScene');
@@ -135,34 +137,48 @@ export class HospitalScene extends Phaser.Scene {
   }
 
   private drawWorldBase(): void {
+    this.worldLayer?.destroy(true);
+    this.worldLayer = this.add.container(0, 0).setDepth(0);
     const { columns, rows, tileSize } = this.state.grid;
+    const map = this.state.mapProgress.activeMapId;
+    const mapPalette = getActiveMapPalette(this.state);
     const worldWidth = columns * tileSize;
     const worldHeight = rows * tileSize;
 
-    this.add.rectangle(worldWidth / 2, worldHeight / 2, worldWidth + 32, worldHeight + 32, 0xf6fff9).setStrokeStyle(6, 0xffffff, 0.85).setDepth(0);
-    this.add.rectangle(worldWidth / 2, 20, worldWidth - 18, 30, 0xd9f7ee, 0.86).setDepth(0.2);
-    this.add.rectangle(worldWidth / 2, worldHeight - 18, worldWidth - 18, 22, 0xb8f0dc, 0.42).setDepth(0.2);
+    this.worldLayer.add(this.add.rectangle(worldWidth / 2, worldHeight / 2, worldWidth + 32, worldHeight + 32, mapPalette.background).setStrokeStyle(6, mapPalette.border, 0.85).setDepth(0));
+    this.worldLayer.add(this.add.rectangle(worldWidth / 2, 20, worldWidth - 18, 30, mapPalette.header, 0.86).setDepth(0.2));
+    this.worldLayer.add(this.add.rectangle(worldWidth / 2, worldHeight - 18, worldWidth - 18, 22, mapPalette.footer, 0.42).setDepth(0.2));
 
     for (let x = 0; x < columns; x += 1) {
       for (let y = 0; y < rows; y += 1) {
-        const key = y === 7 || x === 1 || x === 4 ? TILE_ASSET_KEYS.corridor : x >= 3 && x <= 5 && y >= 4 && y <= 9 ? TILE_ASSET_KEYS.waiting : TILE_ASSET_KEYS.floor;
-        this.add.image(x * tileSize, y * tileSize, key).setOrigin(0).setDisplaySize(tileSize, tileSize).setDepth(1);
+        const key = isMapCorridor(this.state, x, y) ? TILE_ASSET_KEYS.corridor : isMapWaitingArea(this.state, x, y) ? TILE_ASSET_KEYS.waiting : TILE_ASSET_KEYS.floor;
+        const tile = this.add.image(x * tileSize, y * tileSize, key).setOrigin(0).setDisplaySize(tileSize, tileSize).setDepth(1);
+        if (map !== 'gardenClinic') {
+          tile.setTint(isMapCorridor(this.state, x, y) ? mapPalette.route : isMapWaitingArea(this.state, x, y) ? mapPalette.waiting : mapPalette.background);
+          tile.setAlpha(isMapCorridor(this.state, x, y) ? 0.52 : isMapWaitingArea(this.state, x, y) ? 0.72 : 0.4);
+        }
+        this.worldLayer.add(tile);
       }
     }
 
-    this.waitingSign = this.add.text(3.05 * tileSize, 3.28 * tileSize, '', {
+    const waitingArea = getActiveMapWaitingArea(this.state);
+    this.waitingSign = this.add.text((waitingArea.x + 0.05) * tileSize, Math.max(0.4, waitingArea.y - 0.72) * tileSize, '', {
       color: '#2f6157',
       fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif',
       fontSize: '14px',
     }).setDepth(3);
+    this.worldLayer.add(this.waitingSign);
 
-    this.entranceSign = this.add.text(0.65 * tileSize, 7.92 * tileSize, '', {
+    const entrance = getActiveMapEntrance(this.state);
+    this.entranceSign = this.add.text(Math.max(0.35, entrance.x - 0.35) * tileSize, (entrance.y + 0.92) * tileSize, '', {
       color: '#3b7168',
       fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif',
       fontSize: '14px',
     }).setDepth(3);
+    this.worldLayer.add(this.entranceSign);
 
-    this.entrancePulse = this.add.ellipse(1.04 * tileSize, 7.1 * tileSize, 58, 58, 0x18a0fb, 0).setDepth(2.8);
+    this.entrancePulse = this.add.ellipse((entrance.x + 0.04) * tileSize, (entrance.y + 0.1) * tileSize, 58, 58, mapPalette.accent, 0).setDepth(2.8);
+    this.worldLayer.add(this.entrancePulse);
     this.rushBanner = this.add.text(6.35 * tileSize, 1.18 * tileSize, '', {
       color: '#8a3b09',
       fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif',
@@ -170,6 +186,7 @@ export class HospitalScene extends Phaser.Scene {
       backgroundColor: 'rgba(255, 237, 213, 0.88)',
       padding: { x: 10, y: 6 },
     }).setDepth(13).setVisible(false);
+    this.worldLayer.add(this.rushBanner);
 
     this.drawDecorations(tileSize);
   }
@@ -177,35 +194,33 @@ export class HospitalScene extends Phaser.Scene {
   private drawDecorations(tileSize: number): void {
     const receptionX = 1.7 * tileSize;
     const receptionY = 2.25 * tileSize;
-    this.add.rectangle(receptionX, receptionY, 112, 42, 0xfff2bf, 0.98).setStrokeStyle(3, 0xd9a441, 0.75).setDepth(2.5);
-    this.add.rectangle(receptionX - 26, receptionY - 9, 34, 13, 0xffffff, 0.84).setDepth(2.6);
+    this.worldLayer?.add(this.add.rectangle(receptionX, receptionY, 112, 42, 0xfff2bf, 0.98).setStrokeStyle(3, 0xd9a441, 0.75).setDepth(2.5));
+    this.worldLayer?.add(this.add.rectangle(receptionX - 26, receptionY - 9, 34, 13, 0xffffff, 0.84).setDepth(2.6));
     this.receptionSign = this.add.text(receptionX - 42, receptionY + 4, '', {
       color: '#8a6421',
       fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif',
       fontSize: '10px',
     }).setDepth(2.7);
+    this.worldLayer?.add(this.receptionSign);
 
-    const plantPositions = [
-      { x: 6.25, y: 1.1 },
-      { x: 15.85, y: 1.2 },
-      { x: 16.1, y: 10.65 },
-      { x: 2.7, y: 10.65 },
-    ];
+    const plantPositions = getActiveMapDecorations(this.state);
     for (const position of plantPositions) {
-      this.add.ellipse(position.x * tileSize, position.y * tileSize + 11, 24, 14, 0x7a4c2b, 0.95).setDepth(2.4);
-      this.add.circle(position.x * tileSize - 6, position.y * tileSize, 12, 0x35c986, 0.94).setDepth(2.5);
-      this.add.circle(position.x * tileSize + 6, position.y * tileSize - 4, 12, 0x16a34a, 0.9).setDepth(2.5);
+      this.worldLayer?.add(this.add.ellipse(position.x * tileSize, position.y * tileSize + 11, 24, 14, 0x7a4c2b, 0.95).setDepth(2.4));
+      this.worldLayer?.add(this.add.circle(position.x * tileSize - 6, position.y * tileSize, 12, 0x35c986, 0.94).setDepth(2.5));
+      this.worldLayer?.add(this.add.circle(position.x * tileSize + 6, position.y * tileSize - 4, 12, 0x16a34a, 0.9).setDepth(2.5));
     }
 
     for (let index = 0; index < 9; index += 1) {
       const x = (6.4 + index * 0.92) * tileSize;
       const y = (7.12 + (index % 2) * 0.18) * tileSize;
-      this.add.ellipse(x, y, 9, 6, 0x7ecbb7, 0.22).setAngle(index % 2 === 0 ? -18 : 18).setDepth(2.2);
-      this.add.ellipse(x + 7, y + 7, 9, 6, 0x7ecbb7, 0.18).setAngle(index % 2 === 0 ? 18 : -18).setDepth(2.2);
+      this.worldLayer?.add(this.add.ellipse(x, y, 9, 6, 0x7ecbb7, 0.22).setAngle(index % 2 === 0 ? -18 : 18).setDepth(2.2));
+      this.worldLayer?.add(this.add.ellipse(x + 7, y + 7, 9, 6, 0x7ecbb7, 0.18).setAngle(index % 2 === 0 ? 18 : -18).setDepth(2.2));
     }
 
-    const arrow = this.add.triangle(1.15 * tileSize, 6.2 * tileSize, 0, 0, 20, 14, 0, 28, 0x18a0fb, 0.55).setDepth(2.4);
+    const entrance = getActiveMapEntrance(this.state);
+    const arrow = this.add.triangle((entrance.x + 0.15) * tileSize, Math.max(0.8, entrance.y - 0.8) * tileSize, 0, 0, 20, 14, 0, 28, getActiveMapPalette(this.state).accent, 0.55).setDepth(2.4);
     arrow.setAngle(90);
+    this.worldLayer?.add(arrow);
   }
 
   private drawGrid(): void {
@@ -257,6 +272,13 @@ export class HospitalScene extends Phaser.Scene {
   }
 
   private renderState(): void {
+    if (this.renderedMapId !== this.state.mapProgress.activeMapId) {
+      this.renderedMapId = this.state.mapProgress.activeMapId;
+      this.resetWorldViews();
+      this.drawWorldBase();
+      this.drawGrid();
+    }
+
     this.renderWorldLabels();
     this.renderRooms();
     this.renderWaitingComfortDecor();
@@ -267,6 +289,25 @@ export class HospitalScene extends Phaser.Scene {
     this.drawBuildPreview();
     this.drawSelectionMarker();
     this.playFxEvents();
+  }
+
+  private resetWorldViews(): void {
+    for (const view of this.roomViews.values()) {
+      view.destroy(true);
+    }
+    this.roomViews.clear();
+    for (const view of this.patientViews.values()) {
+      view.destroy(true);
+    }
+    this.patientViews.clear();
+    for (const view of this.staffViews.values()) {
+      view.destroy(true);
+    }
+    this.staffViews.clear();
+    for (const object of this.waitingComfortDecor) {
+      object.destroy();
+    }
+    this.waitingComfortDecor = [];
   }
 
   private renderWorldLabels(): void {
@@ -304,21 +345,24 @@ export class HospitalScene extends Phaser.Scene {
     this.waitingComfortDecor = [];
 
     const { tileSize } = this.state.grid;
+    const area = getActiveMapWaitingArea(this.state);
+    const centerX = (area.x + area.width / 2) * tileSize;
+    const centerY = (area.y + area.height / 2) * tileSize;
     if (level >= 1) {
-      this.waitingComfortDecor.push(this.add.ellipse(4.35 * tileSize, 5.38 * tileSize, 52, 32, 0xede9fe, 0.86).setStrokeStyle(2, 0x8b5cf6, 0.32).setDepth(2.65));
-      this.waitingComfortDecor.push(this.add.text(4.02 * tileSize, 5.16 * tileSize, '♡', {
+      this.waitingComfortDecor.push(this.add.ellipse(centerX - 12, centerY - 42, 52, 32, 0xede9fe, 0.86).setStrokeStyle(2, 0x8b5cf6, 0.32).setDepth(2.65));
+      this.waitingComfortDecor.push(this.add.text(centerX - 28, centerY - 52, '♡', {
         color: '#7c3aed',
         fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif',
         fontSize: '18px',
       }).setDepth(2.7));
     }
     if (level >= 2) {
-      this.waitingComfortDecor.push(this.add.circle(4.9 * tileSize, 6.55 * tileSize, 13, 0x80d8ff, 0.9).setStrokeStyle(2, 0x18a0fb, 0.35).setDepth(2.65));
-      this.waitingComfortDecor.push(this.add.rectangle(4.9 * tileSize, 6.55 * tileSize, 18, 5, 0xffffff, 0.66).setDepth(2.7));
+      this.waitingComfortDecor.push(this.add.circle(centerX + 24, centerY - 4, 13, 0x80d8ff, 0.9).setStrokeStyle(2, 0x18a0fb, 0.35).setDepth(2.65));
+      this.waitingComfortDecor.push(this.add.rectangle(centerX + 24, centerY - 4, 18, 5, 0xffffff, 0.66).setDepth(2.7));
     }
     if (level >= 3) {
-      this.waitingComfortDecor.push(this.add.star(3.9 * tileSize, 7.88 * tileSize, 5, 6, 16, 0xfde68a, 0.9).setStrokeStyle(2, 0xf59e0b, 0.4).setDepth(2.65));
-      this.waitingComfortDecor.push(this.add.circle(5.15 * tileSize, 4.45 * tileSize, 10, 0xfccde2, 0.88).setStrokeStyle(2, 0xf06292, 0.32).setDepth(2.65));
+      this.waitingComfortDecor.push(this.add.star(centerX - 36, centerY + 54, 5, 6, 16, 0xfde68a, 0.9).setStrokeStyle(2, 0xf59e0b, 0.4).setDepth(2.65));
+      this.waitingComfortDecor.push(this.add.circle(centerX + 36, centerY - 70, 10, 0xfccde2, 0.88).setStrokeStyle(2, 0xf06292, 0.32).setDepth(2.65));
     }
   }
 
@@ -869,4 +913,34 @@ function getRoomActivityIcon(policy: CarePolicy, progressRatio: number): string 
 function parseTreatmentFxLabel(label: string): TreatmentFxLabel {
   const [stars = '', revenue = '', score = ''] = label.split('|');
   return { stars, revenue, score };
+}
+
+function getActiveMap(state: GameState): MapDefinition {
+  return MAP_DEFINITIONS[state.mapProgress.activeMapId];
+}
+
+function getActiveMapPalette(state: GameState): MapDefinition['palette'] {
+  return getActiveMap(state).palette;
+}
+
+function getActiveMapEntrance(state: GameState): PatientPathStep {
+  return getActiveMap(state).entrance;
+}
+
+function getActiveMapWaitingArea(state: GameState): MapDefinition['waitingArea'] {
+  return getActiveMap(state).waitingArea;
+}
+
+function getActiveMapDecorations(state: GameState): PatientPathStep[] {
+  return getActiveMap(state).decorations;
+}
+
+function isMapCorridor(state: GameState, x: number, y: number): boolean {
+  const map = getActiveMap(state);
+  return map.corridorRows.includes(y) || map.corridorColumns.includes(x);
+}
+
+function isMapWaitingArea(state: GameState, x: number, y: number): boolean {
+  const area = getActiveMapWaitingArea(state);
+  return x >= area.x && x < area.x + area.width && y >= area.y && y < area.y + area.height;
 }

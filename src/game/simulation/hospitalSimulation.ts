@@ -1,4 +1,4 @@
-import { ILLNESSES, MAX_ROOM_LEVEL, PET_KINDS, PET_NAMES, ROOM_DEFINITIONS, SKILL_DEFINITIONS, STAFF_NAMES } from './content';
+import { ILLNESSES, MAP_DEFINITIONS, MAP_ORDER, MAX_ROOM_LEVEL, PET_KINDS, PET_NAMES, ROOM_DEFINITIONS, SKILL_DEFINITIONS, STAFF_NAMES } from './content';
 import { clearLeaderboard, loadLeaderboard, loadPlayerProfile, recordLeaderboardEntry, savePlayerProfile, updatePlayerName } from './playerProgress';
 import { createPathToPoint, createPathToRoom } from './systems/pathfinding';
 import { DEFAULT_LOCALE, getIllnessTitle, getObjectiveTitle, getRoomText, getSkillText, getTranslations } from '../../i18n/translations';
@@ -14,6 +14,9 @@ import type {
   HospitalObjective,
   IllnessDefinition,
   Locale,
+  MapDefinition,
+  MapId,
+  MapProgressState,
   CarePolicy,
   PatientState,
   RoomKind,
@@ -25,17 +28,6 @@ import type {
   TreatmentGrade,
   ContractKind,
 } from './types';
-
-const ENTRANCE = { x: 1, y: 7 };
-const EXIT = { x: 1, y: 7 };
-const WAITING_SPOTS = [
-  { x: 4, y: 4 },
-  { x: 4, y: 5 },
-  { x: 4, y: 6 },
-  { x: 4, y: 7 },
-  { x: 4, y: 8 },
-  { x: 4, y: 9 },
-];
 
 const INITIAL_STAFF: Array<Pick<StaffState, 'name' | 'role' | 'specialty'>> = [
   { name: 'Dr. Mira', role: 'vet', specialty: 'exam' },
@@ -97,9 +89,10 @@ export class HospitalSimulation extends EventTarget {
     if (action.type === 'restart') {
       const locale = this.state.locale;
       const difficulty = this.state.difficulty;
+      const mapProgress = this.state.mapProgress;
       const player = this.state.player;
       const leaderboard = this.state.leaderboard;
-      this.state = createInitialState(locale, difficulty, player, leaderboard);
+      this.state = createInitialState(locale, difficulty, player, leaderboard, mapProgress.activeMapId, mapProgress);
       this.state.player.totalRuns += 1;
       savePlayerProfile(this.state.player);
       this.emit();
@@ -132,6 +125,12 @@ export class HospitalSimulation extends EventTarget {
 
     if (action.type === 'setDifficulty') {
       this.setDifficulty(action.difficulty);
+      this.emit();
+      return;
+    }
+
+    if (action.type === 'selectMap') {
+      this.selectMap(action.mapId);
       this.emit();
       return;
     }
@@ -267,10 +266,36 @@ export class HospitalSimulation extends EventTarget {
     const locale = this.state.locale;
     const player = this.state.player;
     const leaderboard = this.state.leaderboard;
-    this.state = createInitialState(locale, difficulty, player, leaderboard);
+    const mapProgress = this.state.mapProgress;
+    this.state = createInitialState(locale, difficulty, player, leaderboard, mapProgress.activeMapId, mapProgress);
     this.state.player.totalRuns += 1;
     savePlayerProfile(this.state.player);
     this.pushEvent(getTranslations(this.state.locale).events.difficultyChanged(getTranslations(this.state.locale).difficulties[difficulty].title), 'good');
+  }
+
+  private selectMap(mapId: MapId): void {
+    if (this.state.mapProgress.activeMapId === mapId) {
+      return;
+    }
+
+    if (!this.state.mapProgress.unlockedMapIds.includes(mapId)) {
+      const definition = MAP_DEFINITIONS[mapId];
+      this.pushEvent(getTranslations(this.state.locale).events.mapLocked(definition.unlockWave), 'warning');
+      return;
+    }
+
+    const locale = this.state.locale;
+    const difficulty = this.state.difficulty;
+    const player = this.state.player;
+    const leaderboard = this.state.leaderboard;
+    const mapProgress = {
+      ...this.state.mapProgress,
+      activeMapId: mapId,
+    };
+    this.state = createInitialState(locale, difficulty, player, leaderboard, mapId, mapProgress);
+    this.state.player.totalRuns += 1;
+    savePlayerProfile(this.state.player);
+    this.pushEvent(getTranslations(this.state.locale).events.mapSelected(getMapTitle(mapId, this.state.locale)), 'good');
   }
 
   private saveScore(): void {
@@ -630,15 +655,16 @@ export class HospitalSimulation extends EventTarget {
   }
 
   private spawnPatient(): void {
+    const activeMap = getActiveMap(this.state);
     const availableIllnesses = ILLNESSES.filter((illness) =>
       this.state.rooms.some((room) => room.kind === illness.requiredRoom),
     );
     const illnessPool = availableIllnesses.length > 0 ? availableIllnesses : ILLNESSES.filter((illness) => illness.requiredRoom === 'exam');
     const illness = pick(illnessPool);
-    const waitingSpot = WAITING_SPOTS[this.state.patients.length % WAITING_SPOTS.length];
+    const waitingSpot = activeMap.waitingSpots[this.state.patients.length % activeMap.waitingSpots.length];
     const petKind = pick(PET_KINDS);
-    const priority = rollPatientPriority(this.state.reputation, this.state.rushActiveSeconds > 0);
-    const patienceSeconds = Math.max(11, illness.patienceSeconds * getPriorityPatienceMultiplier(priority) * getDifficulty(this.state).patienceMultiplier);
+    const priority = rollPatientPriority(this.state.reputation, this.state.rushActiveSeconds > 0, activeMap.urgentBias);
+    const patienceSeconds = Math.max(11, illness.patienceSeconds * getPriorityPatienceMultiplier(priority) * getDifficulty(this.state).patienceMultiplier * activeMap.patienceMultiplier);
     const patient: PatientState = {
       id: `patient-${this.state.nextPatientId++}`,
       name: pick(PET_NAMES),
@@ -647,11 +673,11 @@ export class HospitalSimulation extends EventTarget {
       illnessId: illness.id,
       requiredRoom: illness.requiredRoom,
       status: 'entering',
-      x: ENTRANCE.x,
-      y: ENTRANCE.y,
+      x: activeMap.entrance.x,
+      y: activeMap.entrance.y,
       targetX: waitingSpot.x,
       targetY: waitingSpot.y,
-      path: createPathToPoint(this.state, ENTRANCE.x, ENTRANCE.y, waitingSpot.x, waitingSpot.y),
+      path: createPathToPoint(this.state, activeMap.entrance.x, activeMap.entrance.y, waitingSpot.x, waitingSpot.y),
       pathIndex: 0,
       maxPatience: patienceSeconds,
       patience: patienceSeconds,
@@ -732,9 +758,10 @@ export class HospitalSimulation extends EventTarget {
       }
 
       if (patient.patience <= 0 && patient.status !== 'leaving') {
+        const activeMap = getActiveMap(this.state);
         this.releaseRoom(patient);
         patient.status = 'leaving';
-        patient.path = createPathToPoint(this.state, patient.x, patient.y, EXIT.x, EXIT.y);
+        patient.path = createPathToPoint(this.state, patient.x, patient.y, activeMap.exit.x, activeMap.exit.y);
         patient.pathIndex = 0;
         setPatientTargetFromPath(patient);
         this.state.reputation = clamp(this.state.reputation - 4, 0, 100);
@@ -778,13 +805,14 @@ export class HospitalSimulation extends EventTarget {
       if (patient.treatmentRemaining <= 0) {
         const illness = ILLNESSES.find((candidate) => candidate.id === patient.illnessId);
         const quality = calculateTreatmentQuality(patient, room, staff, this.state.difficulty);
-        const baseRevenue = Math.round(((illness?.value ?? 60) + definition.revenueBonus + this.state.reputation * 0.25 + (room.level - 1) * 24 + sparkleCare * 12) * getPriorityRevenueMultiplier(patient.priority));
+        const activeMap = getActiveMap(this.state);
+        const baseRevenue = Math.round(((illness?.value ?? 60) + definition.revenueBonus + this.state.reputation * 0.25 + (room.level - 1) * 24 + sparkleCare * 12) * getPriorityRevenueMultiplier(patient.priority) * activeMap.revenueMultiplier);
         const stars = getTreatmentStars(quality.score);
         const streak = quality.grade === 'rough' ? 0 : this.state.metrics.careStreak + 1;
         const streakBonus = getCareStreakBonus(baseRevenue, streak);
         const bonus = Math.round(baseRevenue * quality.bonusRate) + streakBonus;
         const revenue = baseRevenue + bonus;
-        const scoreGain = calculateScoreGain(revenue, quality.score, stars, patient.priority, streak, this.state.difficulty);
+        const scoreGain = calculateScoreGain(revenue, quality.score, stars, patient.priority, streak, this.state.difficulty, activeMap.scoreMultiplier);
         this.state.money += revenue;
         this.state.metrics.revenueToday += revenue;
         this.state.metrics.bestQualityToday = Math.max(this.state.metrics.bestQualityToday, quality.score);
@@ -809,7 +837,7 @@ export class HospitalSimulation extends EventTarget {
           this.awardStaffXp(staff, 42 + room.level * 8);
         }
         patient.status = 'leaving';
-        patient.path = createPathToPoint(this.state, patient.x, patient.y, EXIT.x, EXIT.y);
+        patient.path = createPathToPoint(this.state, patient.x, patient.y, activeMap.exit.x, activeMap.exit.y);
         patient.pathIndex = 0;
         setPatientTargetFromPath(patient);
         this.awardHospitalXp(quality.score + stars * 14 + Math.round(scoreGain / 12));
@@ -870,9 +898,10 @@ export class HospitalSimulation extends EventTarget {
 
   private chargeUpkeep(): void {
     const difficulty = getDifficulty(this.state);
+    const activeMap = getActiveMap(this.state);
     const upkeep = this.state.rooms.reduce((sum, room) => sum + ROOM_DEFINITIONS[room.kind].upkeep + (room.level - 1) * 8, 0);
     const wages = this.state.staff.length * 32;
-    const total = Math.round((upkeep + wages) * difficulty.upkeepMultiplier);
+    const total = Math.round((upkeep + wages) * difficulty.upkeepMultiplier * activeMap.upkeepMultiplier);
     this.state.money -= total;
     this.pushEvent(getTranslations(this.state.locale).events.dailyUpkeep(this.state.day, total), total > this.state.money ? 'warning' : 'neutral');
 
@@ -884,9 +913,10 @@ export class HospitalSimulation extends EventTarget {
   }
 
   private updatePressureAndRush(deltaSeconds: number): void {
+    const activeMap = getActiveMap(this.state);
     const waitingPatients = this.state.patients.filter((patient) => patient.status !== 'leaving').length;
     const openCapacity = Math.max(1, this.state.rooms.length * 2);
-    this.state.queuePressure = clamp((waitingPatients / openCapacity) * 100 * getDifficulty(this.state).pressureMultiplier, 0, 100);
+    this.state.queuePressure = clamp((waitingPatients / openCapacity) * 100 * getDifficulty(this.state).pressureMultiplier * activeMap.pressureMultiplier, 0, 100);
 
     if (this.state.rushActiveSeconds > 0) {
       this.state.rushActiveSeconds = Math.max(0, this.state.rushActiveSeconds - deltaSeconds);
@@ -896,7 +926,7 @@ export class HospitalSimulation extends EventTarget {
     this.state.rushTimer -= deltaSeconds;
     if (this.state.rushTimer <= 0) {
       this.state.rushActiveSeconds = 22;
-      this.state.rushTimer = Math.max(46, 74 - this.state.day * 1.4);
+      this.state.rushTimer = Math.max(38, (74 - this.state.day * 1.4) * activeMap.spawnDelayMultiplier);
       this.state.spawnTimer = Math.min(this.state.spawnTimer, 0.8);
       this.pushFx('warning', 4, 4, getTranslations(this.state.locale).fx.rush);
       this.pushEvent(getTranslations(this.state.locale).events.rushStarted, 'warning');
@@ -905,13 +935,14 @@ export class HospitalSimulation extends EventTarget {
 
   private getNextSpawnDelay(): number {
     const difficulty = getDifficulty(this.state);
+    const activeMap = getActiveMap(this.state);
     const baseDelay = Math.max(5.2, 11.5 - this.state.day * 0.35 - this.state.reputation * 0.022);
     const rushMultiplier = this.state.rushActiveSeconds > 0 ? 0.52 : 1;
     const pressureMultiplier = this.state.queuePressure > 75 ? 1.18 : 1;
     if (this.state.queuePressure > 82 && this.state.events[0]?.message !== getTranslations(this.state.locale).events.pressureWarning) {
       this.pushEvent(getTranslations(this.state.locale).events.pressureWarning, 'warning');
     }
-    return Math.max(2.1, baseDelay * rushMultiplier * pressureMultiplier * difficulty.spawnMultiplier);
+    return Math.max(1.65, baseDelay * rushMultiplier * pressureMultiplier * difficulty.spawnMultiplier * activeMap.spawnDelayMultiplier);
   }
 
   private releaseRoom(patient: PatientState): void {
@@ -971,6 +1002,7 @@ export class HospitalSimulation extends EventTarget {
       this.state.money += reward;
       this.state.metrics.score += scoreReward;
       this.state.metrics.bestScore = Math.max(this.state.metrics.bestScore, this.state.metrics.score, this.state.player.bestScore);
+      this.refreshMapUnlocks();
       this.pushFx('upgrade', 7, 2, `${getTranslations(this.state.locale).fx.hospitalLevel} ${levelState.level}`);
       this.pushEvent(getTranslations(this.state.locale).events.hospitalLevelUp(levelState.level, reward, scoreReward), 'good');
       this.updateObjectiveProgress();
@@ -1007,6 +1039,28 @@ export class HospitalSimulation extends EventTarget {
     this.awardHospitalXp(70 + contract.rewardScore / 5);
     this.pushFx('skill', 5.5, 3, `+${contract.rewardScore}`);
     this.pushEvent(getTranslations(this.state.locale).events.contractComplete(getContractTitle(contract.kind, this.state.locale), contract.rewardScore), 'good');
+  }
+
+  private refreshMapUnlocks(): void {
+    const previousHighestChapter = this.state.mapProgress.highestUnlockedChapter;
+    const retainedUnlockWave = Math.max(...this.state.mapProgress.unlockedMapIds.map((mapId) => MAP_DEFINITIONS[mapId].unlockWave));
+    const highestWave = Math.max(this.state.objectiveWave, this.state.hospitalLevel.level, retainedUnlockWave);
+    const unlockedMapIds = MAP_ORDER.filter((mapId) => MAP_DEFINITIONS[mapId].unlockWave <= highestWave);
+    const highestUnlockedChapter = Math.max(...unlockedMapIds.map((mapId) => MAP_DEFINITIONS[mapId].chapter));
+
+    this.state.mapProgress = {
+      activeMapId: this.state.mapProgress.activeMapId,
+      highestUnlockedChapter,
+      unlockedMapIds,
+    };
+
+    if (highestUnlockedChapter > previousHighestChapter) {
+      const newestMap = [...unlockedMapIds].reverse().find((mapId) => MAP_DEFINITIONS[mapId].chapter === highestUnlockedChapter);
+      if (newestMap) {
+        this.pushEvent(getTranslations(this.state.locale).events.mapUnlocked(getMapTitle(newestMap, this.state.locale)), 'good');
+        this.pushFx('upgrade', 9.2, 2.4, getTranslations(this.state.locale).fx.mapUnlocked);
+      }
+    }
   }
 
   private updateObjectiveProgress(): void {
@@ -1053,6 +1107,7 @@ export class HospitalSimulation extends EventTarget {
     }
 
     this.state.objectiveWave += 1;
+    this.refreshMapUnlocks();
     const newObjectives = createObjectiveWave(this.state.objectiveWave).map((objective) => ({
       ...objective,
       progress: getObjectiveProgress(this.state, objective),
@@ -1094,8 +1149,15 @@ export function createInitialState(
   difficulty: DifficultyId = 'classic',
   player = loadPlayerProfile(),
   leaderboard = loadLeaderboard(),
+  mapId: MapId = 'gardenClinic',
+  mapProgress: MapProgressState = createMapProgress(mapId, 1),
 ): GameState {
   const difficultyDefinition = DIFFICULTY_DEFINITIONS[difficulty];
+  const activeMap = MAP_DEFINITIONS[mapId];
+  const normalizedMapProgress = normalizeMapProgress({
+    ...mapProgress,
+    activeMapId: mapId,
+  });
   const state: GameState = {
     grid: {
       columns: 18,
@@ -1110,6 +1172,7 @@ export function createInitialState(
     speed: 1,
     locale,
     difficulty,
+    mapProgress: normalizedMapProgress,
     player,
     leaderboard,
     selectedRoomKind: 'exam',
@@ -1151,44 +1214,82 @@ export function createInitialState(
     spawnTimer: 2,
   };
 
-  state.staff = INITIAL_STAFF.map((staff) => createStaff(`staff-${state.nextStaffId++}`, staff.name, staff.role, staff.specialty));
-
-  state.rooms.push({
-    id: `room-${state.nextRoomId++}`,
-    kind: 'exam',
-    gridX: 7,
-    gridY: 4,
-    width: ROOM_DEFINITIONS.exam.width,
-    height: ROOM_DEFINITIONS.exam.height,
-    level: 1,
-    assignedStaffId: state.staff[0]?.id,
-    carePolicy: 'balanced',
-    patientsTreated: 0,
-    cleanliness: 100,
-    cleaningCooldown: 0,
-  });
-
-  state.rooms.push({
-    id: `room-${state.nextRoomId++}`,
-    kind: 'recovery',
-    gridX: 11,
-    gridY: 4,
-    width: ROOM_DEFINITIONS.recovery.width,
-    height: ROOM_DEFINITIONS.recovery.height,
-    level: 1,
-    assignedStaffId: state.staff[1]?.id,
-    carePolicy: 'balanced',
-    patientsTreated: 0,
-    cleanliness: 100,
-    cleaningCooldown: 0,
-  });
-
-  state.staff[0].assignedRoomId = state.rooms[0].id;
-  state.staff[1].assignedRoomId = state.rooms[1].id;
+  state.staff = createInitialStaffForMap(state, activeMap);
+  state.rooms = createInitialRoomsForMap(state, activeMap);
 
   state.events = createInitialEvents(state);
 
   return state;
+}
+
+function createInitialStaffForMap(state: GameState, map: MapDefinition): StaffState[] {
+  const staffPlan = INITIAL_STAFF.map((staff) => ({ ...staff }));
+  if (map.chapter >= 3) {
+    staffPlan.push({ name: 'Tech Sam', role: 'tech', specialty: 'lab' });
+  }
+
+  return staffPlan.map((staff) => createStaff(`staff-${state.nextStaffId++}`, staff.name, staff.role, staff.specialty));
+}
+
+function createInitialRoomsForMap(state: GameState, map: MapDefinition): RoomState[] {
+  return map.startingRooms.map((roomPlan, index) => {
+    const definition = ROOM_DEFINITIONS[roomPlan.kind];
+    const staff = state.staff[index];
+    const room: RoomState = {
+      id: `room-${state.nextRoomId++}`,
+      kind: roomPlan.kind,
+      gridX: roomPlan.gridX,
+      gridY: roomPlan.gridY,
+      width: definition.width,
+      height: definition.height,
+      level: 1,
+      assignedStaffId: staff?.id,
+      carePolicy: 'balanced',
+      patientsTreated: 0,
+      cleanliness: 100,
+      cleaningCooldown: 0,
+    };
+
+    if (staff) {
+      staff.assignedRoomId = room.id;
+      if (staff.specialty !== 'all' && staff.specialty !== room.kind) {
+        staff.specialty = room.kind;
+      }
+    }
+
+    return room;
+  });
+}
+
+function createMapProgress(activeMapId: MapId, highestWave: number): MapProgressState {
+  const unlockedMapIds = MAP_ORDER.filter((mapId) => MAP_DEFINITIONS[mapId].unlockWave <= highestWave);
+  const safeActiveMapId = unlockedMapIds.includes(activeMapId) ? activeMapId : unlockedMapIds[0];
+  return {
+    activeMapId: safeActiveMapId,
+    highestUnlockedChapter: Math.max(...unlockedMapIds.map((mapId) => MAP_DEFINITIONS[mapId].chapter)),
+    unlockedMapIds,
+  };
+}
+
+function normalizeMapProgress(progress: MapProgressState): MapProgressState {
+  const highestWave = Math.max(...progress.unlockedMapIds.map((mapId) => MAP_DEFINITIONS[mapId]?.unlockWave ?? 1), MAP_DEFINITIONS[progress.activeMapId]?.unlockWave ?? 1);
+  const normalized = createMapProgress(progress.activeMapId, highestWave);
+  return {
+    ...normalized,
+    highestUnlockedChapter: Math.max(normalized.highestUnlockedChapter, progress.highestUnlockedChapter),
+  };
+}
+
+function getActiveMap(state: Pick<GameState, 'mapProgress'>): MapDefinition {
+  return MAP_DEFINITIONS[state.mapProgress.activeMapId];
+}
+
+export function getMapTitle(mapId: MapId, locale: Locale): string {
+  return getTranslations(locale).maps[mapId].title;
+}
+
+export function getMapText(mapId: MapId, locale: Locale) {
+  return getTranslations(locale).maps[mapId];
 }
 
 function createInitialObjectives(): HospitalObjective[] {
@@ -1360,12 +1461,22 @@ function createObjectiveWave(wave: number): HospitalObjective[] {
         rewardReputation: 5,
         completed: false,
       },
+      {
+        id: 'unlock-downtown-rescue',
+        kind: 'unlockMap',
+        wave,
+        target: 2,
+        progress: 0,
+        rewardMoney: 430,
+        rewardReputation: 5,
+        completed: false,
+      },
     ];
   }
 
   const targetTreated = 18 + (wave - 4) * 8;
   const targetReputation = Math.min(98, 88 + (wave - 4) * 3);
-  return [
+  const objectives: HospitalObjective[] = [
     {
       id: `treat-${targetTreated}-pets`,
       kind: 'treatPets',
@@ -1417,6 +1528,22 @@ function createObjectiveWave(wave: number): HospitalObjective[] {
       completed: false,
     },
   ];
+
+  const mapToUnlock = MAP_ORDER.find((mapId) => MAP_DEFINITIONS[mapId].unlockWave === wave);
+  if (mapToUnlock) {
+    objectives.push({
+      id: `unlock-${mapToUnlock}`,
+      kind: 'unlockMap',
+      wave,
+      target: MAP_DEFINITIONS[mapToUnlock].chapter,
+      progress: 0,
+      rewardMoney: 520 + wave * 65,
+      rewardReputation: 6,
+      completed: false,
+    });
+  }
+
+  return objectives;
 }
 
 function getObjectiveProgress(state: GameState, objective: HospitalObjective): number {
@@ -1449,6 +1576,9 @@ function getObjectiveProgress(state: GameState, objective: HospitalObjective): n
   }
   if (objective.kind === 'completeContracts') {
     return state.completedContracts;
+  }
+  if (objective.kind === 'unlockMap') {
+    return state.mapProgress.highestUnlockedChapter;
   }
   return state.staff.length;
 }
@@ -1559,11 +1689,11 @@ function calculateTreatmentQuality(patient: PatientState, room: RoomState, staff
   return { grade: 'rough', score, bonusRate: -0.08, reputationDelta: 0.8 };
 }
 
-function calculateScoreGain(revenue: number, qualityScore: number, stars: number, priority: PatientPriority, streak: number, difficulty: DifficultyId): number {
+function calculateScoreGain(revenue: number, qualityScore: number, stars: number, priority: PatientPriority, streak: number, difficulty: DifficultyId, mapScoreMultiplier = 1): number {
   const priorityBonus = priority === 'vip' ? 44 : priority === 'urgent' ? 28 : 12;
   const streakBonus = Math.min(120, streak * 10);
   const rawScore = revenue * 0.75 + qualityScore * 3 + stars * 32 + priorityBonus + streakBonus;
-  return Math.max(1, Math.round(rawScore * DIFFICULTY_DEFINITIONS[difficulty].scoreMultiplier));
+  return Math.max(1, Math.round(rawScore * DIFFICULTY_DEFINITIONS[difficulty].scoreMultiplier * mapScoreMultiplier));
 }
 
 function getTreatmentStars(score: number): number {
@@ -1624,9 +1754,9 @@ function getDifficulty(state: Pick<GameState, 'difficulty'>): DifficultyDefiniti
   return DIFFICULTY_DEFINITIONS[state.difficulty];
 }
 
-function rollPatientPriority(reputation: number, isRushActive: boolean): PatientPriority {
+function rollPatientPriority(reputation: number, isRushActive: boolean, urgentBias = 0): PatientPriority {
   const roll = Math.random();
-  const urgentChance = isRushActive ? 0.22 : 0.12;
+  const urgentChance = clamp((isRushActive ? 0.22 : 0.12) + urgentBias, 0.05, 0.48);
   const vipChance = Math.min(0.18, 0.04 + reputation / 900);
   if (roll < vipChance) {
     return 'vip';

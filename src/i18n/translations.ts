@@ -1,4 +1,4 @@
-import type { CarePolicy, ContractKind, HospitalObjective, IllnessDefinition, Locale, DifficultyId, PatientPriority, PatientStatus, PetKind, RoomDefinition, RoomKind, SkillId, StaffRole, TreatmentGrade } from '../game/simulation/types';
+import type { CarePolicy, ContractKind, HospitalObjective, IllnessDefinition, Locale, DifficultyId, MapId, PatientPriority, PatientStatus, PetKind, RoomDefinition, RoomKind, SkillId, StaffRole, TreatmentGrade } from '../game/simulation/types';
 
 export const DEFAULT_LOCALE: Locale = 'en';
 
@@ -10,6 +10,12 @@ export interface LocalizedRoomText {
 
 export interface LocalizedSkillText {
   title: string;
+  description: string;
+}
+
+export interface LocalizedMapText {
+  title: string;
+  subtitle: string;
   description: string;
 }
 
@@ -143,6 +149,14 @@ export interface TranslationBundle {
     activeContracts: string;
     availableContracts: string;
     contractReward: string;
+    mapChapter: string;
+    mapSelect: string;
+    mapLocked: string;
+    mapActive: string;
+    mapUnlocksAt: (wave: number) => string;
+    mapPressure: string;
+    mapRevenue: string;
+    mapUrgency: string;
   };
   tutorial: {
     title: string;
@@ -160,6 +174,7 @@ export interface TranslationBundle {
   pets: Record<PetKind, string>;
   staffRoles: Record<StaffRole, string>;
   rooms: Record<RoomKind, LocalizedRoomText>;
+  maps: Record<MapId, LocalizedMapText>;
   illnesses: Record<string, string>;
   skills: Record<SkillId, LocalizedSkillText>;
   events: {
@@ -213,6 +228,9 @@ export interface TranslationBundle {
     contractComplete: (contract: string, score: number) => string;
     contractSlotsFull: string;
     hospitalLevelUp: (level: number, money: number, score: number) => string;
+    mapUnlocked: (map: string) => string;
+    mapSelected: (map: string) => string;
+    mapLocked: (wave: number) => string;
   };
   fx: {
     roomBuilt: string;
@@ -233,6 +251,7 @@ export interface TranslationBundle {
     scoreSaved: string;
     contract: string;
     hospitalLevel: string;
+    mapUnlocked: string;
     roomLevel: (level: number) => string;
   };
   objectives: {
@@ -376,6 +395,14 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       activeContracts: 'Active Contracts',
       availableContracts: 'Available Contracts',
       contractReward: 'Reward',
+      mapChapter: 'Chapter Map',
+      mapSelect: 'Start Map',
+      mapLocked: 'Locked',
+      mapActive: 'Active',
+      mapUnlocksAt: (wave) => `Unlocks at chapter ${wave}`,
+      mapPressure: 'Pressure',
+      mapRevenue: 'Revenue',
+      mapUrgency: 'Urgency',
     },
     tutorial: {
       title: 'Grow your pet hospital',
@@ -427,6 +454,28 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
         title: 'Sunny Recovery Ward',
         shortTitle: 'Rest',
         description: 'A calm place for nervous pets and sprained paws.',
+      },
+    },
+    maps: {
+      gardenClinic: {
+        title: 'Garden Clinic',
+        subtitle: 'Soft Opening',
+        description: 'Forgiving demand and short routes for building your first pet-care rhythm.',
+      },
+      downtownRescue: {
+        title: 'Downtown Rescue',
+        subtitle: 'Busy City Intake',
+        description: 'More urgent shelter cases arrive, pushing staff routing and queue control.',
+      },
+      beachsideSpa: {
+        title: 'Beachside Spa',
+        subtitle: 'VIP Wellness Week',
+        description: 'Higher payouts come with cleaner rooms, stricter quality, and more VIP care.',
+      },
+      mountainEmergency: {
+        title: 'Mountain Emergency',
+        subtitle: 'Storm Season Triage',
+        description: 'The hardest map: long routes, fast emergencies, and expensive upkeep.',
       },
     },
     illnesses: {
@@ -508,6 +557,9 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       contractComplete: (contract, score) => `${contract} completed. Bonus score +${score}.`,
       contractSlotsFull: 'Finish an active contract before accepting another.',
       hospitalLevelUp: (level, money, score) => `Hospital reached level ${level}. Bonus: $${money} and +${score} score.`,
+      mapUnlocked: (map) => `${map} unlocked. Open the Chapter Map to start a tougher branch.`,
+      mapSelected: (map) => `${map} selected. A fresh run has started on this map.`,
+      mapLocked: (wave) => `Complete chapter ${wave} goals to unlock this map.`,
     },
     fx: {
       roomBuilt: '+ room',
@@ -528,6 +580,7 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       scoreSaved: 'saved',
       contract: 'contract',
       hospitalLevel: 'clinic up',
+      mapUnlocked: 'map open',
       roomLevel: (level) => `Lv ${level}`,
     },
     objectives: {
@@ -561,6 +614,9 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
         }
         if (objective.kind === 'completeContracts') {
           return `Complete ${objective.target} contracts`;
+        }
+        if (objective.kind === 'unlockMap') {
+          return `Unlock chapter ${objective.target} map`;
         }
         return `Hire ${objective.target} staff`;
       },
@@ -758,6 +814,14 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       activeContracts: '进行中合约',
       availableContracts: '可接合约',
       contractReward: '奖励',
+      mapChapter: '章节地图',
+      mapSelect: '进入地图',
+      mapLocked: '未解锁',
+      mapActive: '当前',
+      mapUnlocksAt: (wave) => `第 ${wave} 章解锁`,
+      mapPressure: '压力',
+      mapRevenue: '收益',
+      mapUrgency: '急诊',
     },
     tutorial: {
       title: '扩建你的宠物医院',
@@ -809,6 +873,28 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
         title: '阳光恢复室',
         shortTitle: '恢复',
         description: '安抚紧张宠物，也照顾扭伤的小爪。',
+      },
+    },
+    maps: {
+      gardenClinic: {
+        title: '花园诊所',
+        subtitle: '温柔开业',
+        description: '需求宽松、路线较短，适合建立第一套宠物护理节奏。',
+      },
+      downtownRescue: {
+        title: '市中心救助站',
+        subtitle: '城市高峰接诊',
+        description: '更多收容急诊病例到来，考验员工调度和队列控制。',
+      },
+      beachsideSpa: {
+        title: '海滨护理中心',
+        subtitle: '贵宾健康周',
+        description: '收益更高，但要求更干净的房间、更高护理质量和更多贵宾服务。',
+      },
+      mountainEmergency: {
+        title: '山地急救医院',
+        subtitle: '风暴季分诊',
+        description: '最高难度地图：路线更长、急诊更快、维护成本更高。',
       },
     },
     illnesses: {
@@ -890,6 +976,9 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       contractComplete: (contract, score) => `${contract} 已完成。额外积分 +${score}。`,
       contractSlotsFull: '请先完成一个进行中的合约，再接受新合约。',
       hospitalLevelUp: (level, money, score) => `医院升到 ${level} 级。奖励：$${money} 和 +${score} 积分。`,
+      mapUnlocked: (map) => `${map} 已解锁。打开章节地图，挑战更高难度分院。`,
+      mapSelected: (map) => `已进入${map}，新一局分院经营开始。`,
+      mapLocked: (wave) => `完成第 ${wave} 章目标后解锁此地图。`,
     },
     fx: {
       roomBuilt: '+ 房间',
@@ -910,6 +999,7 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       scoreSaved: '已保存',
       contract: '合约',
       hospitalLevel: '医院升级',
+      mapUnlocked: '新地图',
       roomLevel: (level) => `${level}级`,
     },
     objectives: {
@@ -943,6 +1033,9 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
         }
         if (objective.kind === 'completeContracts') {
           return `完成 ${objective.target} 个任务合约`;
+        }
+        if (objective.kind === 'unlockMap') {
+          return `解锁第 ${objective.target} 章地图`;
         }
         return `雇佣 ${objective.target} 名员工`;
       },

@@ -17,7 +17,7 @@
 - 治疗更多宠物，避免患者等待过久离开。
 - 建设不同科室，覆盖更多病例类型。
 - 提升医院声誉和每日收入。
-- 完成阶段目标，解锁下一波经营挑战。
+- 完成阶段目标，解锁下一波经营挑战和更高难度地图。
 - 管理员工精力、技能和房间分配。
 - 保持房间清洁，提升治疗质量和收益。
 
@@ -50,7 +50,21 @@
 
 切换难度会开启一局新的经营，保留玩家档案和排行榜，但重置当前医院状态。
 
-### 6. 医院等级与任务合约
+
+### 6. 章节地图与难度递进
+
+左侧“章节地图”会随着章节目标和医院等级逐步解锁新分院。进入已解锁地图会开启一局新的分院经营，保留玩家档案和排行榜，但重置当前局医院状态。
+
+| 地图 | 解锁 | 难度变化 |
+| --- | --- | --- |
+| 花园诊所 | 初始开放 | 路线短、压力标准，适合熟悉经营循环。 |
+| 市中心救助站 | 第 3 章附近 | 更多急诊病例，队列压力、维护费和收益同步提高。 |
+| 海滨护理中心 | 第 5 章附近 | 贵宾护理收益更高，但更依赖清洁、舒适度和高质量治疗。 |
+| 山地急救医院 | 第 7 章附近 | 路线更长、急诊更快、维护更贵，是当前最高挑战。 |
+
+地图倍率会叠加在难度模式之上：专家难度 + 后期地图会显著提升压力和积分上限；温馨难度 + 后期地图则更适合练习布局。
+
+### 7. 医院等级与任务合约
 
 医院等级会随着治疗表现、积分奖励和合约完成获得 XP。升级医院会带来额外资金和积分奖励，让长期经营不只依赖每日收入。
 
@@ -63,7 +77,7 @@
 
 合约会随着章节推进持续刷新，是冲击排行榜和专家难度的重要积分来源。
 
-### 7. 房间类型
+### 8. 房间类型
 
 | 房间 | 英文名 | 适合病例 | 特点 |
 | --- | --- | --- | --- |
@@ -74,7 +88,7 @@
 
 建议开局优先补齐基础诊室，再根据队列中“Needs / 需要”的房间需求扩建。
 
-### 8. 宠物与优先级
+### 9. 宠物与优先级
 
 宠物患者会带着不同病例来到医院，并拥有耐心值。等待越久，耐心越低；耐心耗尽后患者会离开，影响当日表现。
 
@@ -161,7 +175,7 @@
 
 治疗报告会展示评分、星级、收入、奖金和护理策略；每日报告会总结当天治疗数、流失数、收入、最佳质量和声誉。
 
-### 16. 操作方式
+### 17. 操作方式
 
 | 操作 | 说明 |
 | --- | --- |
@@ -175,8 +189,9 @@
 | `3` | 选择小小诊断实验室。 |
 | `4` | 选择阳光恢复病房。 |
 | `中文 / English` | 切换中文和英文界面。 |
+| 章节地图 | 进入已解锁的新地图，开始更高难度分院经营。 |
 
-### 17. 新手建议
+### 18. 新手建议
 
 - 开局先保证至少有一个诊室，再观察队列需求补房间。
 - 不要一次性花光资金，保留清洁、安抚和雇佣预算。
@@ -185,7 +200,7 @@
 - 房间清洁低于风险线时优先处理，避免收益和质量下滑。
 - 目标推荐的房间通常是当前最值得建设的选择。
 
-### 18. 技术结构
+### 19. 技术结构
 
 当前项目采用 Phaser、TypeScript 和 Vite：
 
@@ -216,7 +231,7 @@ Your main goals are to:
 - Treat more pets before they run out of patience.
 - Build the right rooms for incoming case types.
 - Increase reputation and daily revenue.
-- Complete chapter objectives and unlock new challenge waves.
+- Complete chapter objectives to unlock new challenge waves and tougher maps.
 - Manage staff energy, assignments, skills, and training.
 - Keep rooms clean to protect treatment quality and rewards.
 
@@ -249,7 +264,21 @@ The leaderboard is local-only through `localStorage`; no backend service is requ
 
 Changing difficulty starts a fresh run while preserving the player profile and leaderboard.
 
-### 6. Hospital Levels and Mission Contracts
+
+### 6. Chapter Maps and Difficulty Progression
+
+The left Chapter Map unlocks new hospital branches as chapter goals and hospital levels advance. Entering an unlocked map starts a fresh branch run while preserving the local player profile and leaderboard.
+
+| Map | Unlock | Challenge Shift |
+| --- | --- | --- |
+| Garden Clinic | Open from start | Short routes and standard pressure for learning the core loop. |
+| Downtown Rescue | Around chapter 3 | More urgent shelter cases, higher queue pressure, higher upkeep, and better rewards. |
+| Beachside Spa | Around chapter 5 | Higher VIP-style rewards, but stronger demands on cleanliness, comfort, and quality. |
+| Mountain Emergency | Around chapter 7 | Longer routing, faster emergencies, expensive upkeep, and the hardest current layout. |
+
+Map multipliers stack with difficulty modes. Expert difficulty on later maps creates the highest pressure and score ceiling, while Cozy difficulty on later maps is better for layout practice.
+
+### 7. Hospital Levels and Mission Contracts
 
 The hospital earns XP from strong treatment results, score rewards, and completed contracts. Leveling up grants extra cash and score, making long-term clinic growth meaningful beyond daily income.
 
@@ -262,7 +291,7 @@ The left-side contract panel offers optional challenges. Up to two contracts can
 
 Contracts refresh as chapters advance and are a major score source for leaderboard runs and Expert difficulty.
 
-### 7. Room Types
+### 8. Room Types
 
 | Room | Best For | Notes |
 | --- | --- | --- |
@@ -273,7 +302,7 @@ Contracts refresh as chapters advance and are a major score source for leaderboa
 
 A good opening is to secure basic exam coverage first, then expand based on the queue’s “Needs” labels.
 
-### 8. Pets and Priorities
+### 9. Pets and Priorities
 
 Each pet arrives with a case, required room, priority, and patience timer. If patience reaches zero, the pet leaves and your daily performance suffers.
 
@@ -360,7 +389,7 @@ Completing objectives grants money and reputation, then advances the chapter wav
 
 Treatment reports show grade, stars, revenue, bonus, and care policy. Daily reports summarize treated pets, lost pets, revenue, best quality, and reputation.
 
-### 16. Controls
+### 17. Controls
 
 | Input | Action |
 | --- | --- |
@@ -375,7 +404,7 @@ Treatment reports show grade, stars, revenue, bonus, and care policy. Daily repo
 | `4` | Select Sunny Recovery Ward. |
 | `中文 / English` | Switch interface language. |
 
-### 17. Beginner Tips
+### 18. Beginner Tips
 
 - Start with exam coverage, then build around queue demand.
 - Keep reserve money for cleaning, soothing, and hiring.
@@ -384,7 +413,7 @@ Treatment reports show grade, stars, revenue, bonus, and care policy. Daily repo
 - Clean risky rooms before quality and income suffer.
 - Follow the recommended build highlight when unsure what to build next.
 
-### 18. Technical Structure
+### 19. Technical Structure
 
 The project uses Phaser, TypeScript, and Vite:
 

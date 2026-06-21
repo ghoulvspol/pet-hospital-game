@@ -16,7 +16,7 @@ export type HospitalFxKind = 'build' | 'heal' | 'upgrade' | 'skill' | 'warning';
 
 export type Locale = 'en' | 'zh';
 
-export type ObjectiveKind = 'treatPets' | 'buildRoomKind' | 'upgradeRoom' | 'reachReputation' | 'reachCareStreak' | 'upgradeWaitingComfort' | 'earnRevenueToday' | 'hireStaff' | 'reachScore' | 'treatUrgentPets' | 'completeContracts';
+export type ObjectiveKind = 'treatPets' | 'buildRoomKind' | 'upgradeRoom' | 'reachReputation' | 'reachCareStreak' | 'upgradeWaitingComfort' | 'earnRevenueToday' | 'hireStaff' | 'reachScore' | 'treatUrgentPets' | 'completeContracts' | 'unlockMap';
 
 export type TreatmentGrade = 'excellent' | 'good' | 'rough';
 
@@ -25,6 +25,8 @@ export type PatientPriority = 'normal' | 'urgent' | 'vip';
 export type CarePolicy = 'balanced' | 'express' | 'comfort';
 
 export type DifficultyId = 'cozy' | 'classic' | 'expert';
+
+export type MapId = 'gardenClinic' | 'downtownRescue' | 'beachsideSpa' | 'mountainEmergency';
 
 export interface RoomDefinition {
   kind: RoomKind;
@@ -142,6 +144,45 @@ export interface DifficultyDefinition {
   pressureMultiplier: number;
 }
 
+export interface MapDefinition {
+  id: MapId;
+  chapter: number;
+  unlockWave: number;
+  title: string;
+  subtitle: string;
+  description: string;
+  palette: {
+    background: number;
+    border: number;
+    header: number;
+    footer: number;
+    route: number;
+    accent: number;
+    waiting: number;
+  };
+  entrance: PatientPathStep;
+  exit: PatientPathStep;
+  waitingSpots: PatientPathStep[];
+  corridorRows: number[];
+  corridorColumns: number[];
+  waitingArea: { x: number; y: number; width: number; height: number };
+  startingRooms: Array<{ kind: RoomKind; gridX: number; gridY: number }>;
+  decorations: PatientPathStep[];
+  spawnDelayMultiplier: number;
+  patienceMultiplier: number;
+  revenueMultiplier: number;
+  pressureMultiplier: number;
+  upkeepMultiplier: number;
+  urgentBias: number;
+  scoreMultiplier: number;
+}
+
+export interface MapProgressState {
+  activeMapId: MapId;
+  highestUnlockedChapter: number;
+  unlockedMapIds: MapId[];
+}
+
 export interface PlayerProfile {
   id: string;
   name: string;
@@ -239,6 +280,7 @@ export interface GameState {
   speed: number;
   locale: Locale;
   difficulty: DifficultyId;
+  mapProgress: MapProgressState;
   player: PlayerProfile;
   leaderboard: LeaderboardEntry[];
   selectedRoomKind: RoomKind;
@@ -290,6 +332,7 @@ export type HospitalAction =
   | { type: 'setSpeed'; speed: number }
   | { type: 'setLocale'; locale: Locale }
   | { type: 'setDifficulty'; difficulty: DifficultyId }
+  | { type: 'selectMap'; mapId: MapId }
   | { type: 'setPlayerName'; name: string }
   | { type: 'saveScore' }
   | { type: 'clearLeaderboard' }
