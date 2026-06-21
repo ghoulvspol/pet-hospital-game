@@ -86,6 +86,9 @@ const scenarios = [
       simulation.dispatch({ type: 'setSpeed', speed: 3 });
       for (let step = 0; step < 260; step += 1) simulation.update(0.75);
       simulation.dispatch({ type: 'setPaused', paused: true });
+      if (state.hudCollapsed.reports) {
+        simulation.dispatch({ type: 'toggleHudSection', section: 'reports' });
+      }
       return true;
     })()`,
     checks: `(() => {
@@ -119,7 +122,7 @@ const scenarios = [
       state.metrics.lostToday = 0;
       state.rooms.forEach((room, index) => { room.cleanliness = index === 0 ? 18 : 34; room.cleaningCooldown = 0; });
       state.staff.forEach((staff) => { staff.mode = 'working'; staff.energy = 16; });
-      state.patients = Array.from({ length: 2 }, (_, index) => ({ id: 'visual-stress-' + index, name: 'Risk ' + (index + 1), petKind: index % 2 === 0 ? 'dog' : 'cat', priority: 'urgent', illnessId: 'paw-bump', requiredRoom: 'exam', status: 'waiting', x: 4, y: 4 + index, targetX: 4, targetY: 4 + index, path: [], pathIndex: 0, maxPatience: 100, patience: index === 0 ? 0 : 10, treatmentRemaining: 7, triageBoost: false }));
+      state.patients = Array.from({ length: 2 }, (_, index) => ({ id: 'visual-stress-' + index, name: 'Risk ' + (index + 1), petKind: index % 2 === 0 ? 'dog' : 'cat', temperament: index % 2 === 0 ? 'fussy' : 'shy', story: index % 2 === 0 ? 'complaining about every thermometer' : 'needs a gentle first visit', priority: 'urgent', illnessId: 'paw-bump', requiredRoom: 'exam', status: 'waiting', x: 4, y: 4 + index, targetX: 4, targetY: 4 + index, path: [], pathIndex: 0, maxPatience: 100, patience: index === 0 ? 0 : 10, treatmentRemaining: 7, triageBoost: false }));
       simulation.dispatch({ type: 'setPaused', paused: false });
       simulation.update(1.5);
       state.queuePressure = 96;

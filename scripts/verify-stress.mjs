@@ -55,6 +55,8 @@ try {
       id: 'stress-patient-' + index,
       name: 'Stress ' + (index + 1),
       petKind: index % 2 === 0 ? 'dog' : 'cat',
+      temperament: index % 2 === 0 ? 'fussy' : 'shy',
+      story: index % 2 === 0 ? 'complaining about every thermometer' : 'needs a gentle first visit',
       priority: index < 2 ? 'urgent' : 'normal',
       illnessId: index % 3 === 0 ? 'paw-bump' : 'wellness-check',
       requiredRoom: 'exam',
@@ -74,6 +76,9 @@ try {
     simulation.update(1.5);
     state.queuePressure = 96;
     simulation.dispatch({ type: 'setPaused', paused: true });
+    if (state.hudCollapsed.reports) {
+      simulation.dispatch({ type: 'toggleHudSection', section: 'reports' });
+    }
     return true;
   })()`);
   assert(prepared, 'test mode exposes simulation for stress scenario');

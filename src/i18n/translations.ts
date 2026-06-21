@@ -1,4 +1,4 @@
-import type { CarePolicy, ContractKind, HospitalObjective, IllnessDefinition, Locale, DifficultyId, MapId, PatientPriority, PatientStatus, PetKind, RoomDefinition, RoomKind, SkillId, StaffRole, TreatmentGrade } from '../game/simulation/types';
+import type { CarePolicy, ContractKind, HospitalIncidentKind, HospitalObjective, IllnessDefinition, Locale, DifficultyId, MapId, PatientPriority, PatientStatus, PetKind, PetTemperament, RoomDefinition, RoomKind, SkillId, StaffRole, TreatmentGrade } from '../game/simulation/types';
 
 export const DEFAULT_LOCALE: Locale = 'en';
 
@@ -157,6 +157,13 @@ export interface TranslationBundle {
     mapPressure: string;
     mapRevenue: string;
     mapUrgency: string;
+    incident: string;
+    incidentReward: string;
+    incidentPenalty: string;
+    temperament: string;
+    story: string;
+    expand: string;
+    collapse: string;
   };
   tutorial: {
     title: string;
@@ -231,6 +238,9 @@ export interface TranslationBundle {
     mapUnlocked: (map: string) => string;
     mapSelected: (map: string) => string;
     mapLocked: (wave: number) => string;
+    incidentStarted: (incident: string) => string;
+    incidentComplete: (incident: string, money: number, score: number) => string;
+    incidentFailed: (incident: string, reputation: number) => string;
   };
   fx: {
     roomBuilt: string;
@@ -252,11 +262,15 @@ export interface TranslationBundle {
     contract: string;
     hospitalLevel: string;
     mapUnlocked: string;
+    incident: string;
+    incidentMissed: string;
     roomLevel: (level: number) => string;
   };
   objectives: {
     title: (objective: HospitalObjective, roomName?: string) => string;
   };
+  incidents: Record<HospitalIncidentKind, LocalizedSkillText>;
+  temperaments: Record<PetTemperament, string>;
   contracts: Record<ContractKind, LocalizedSkillText>;
   grades: Record<TreatmentGrade, string>;
   priorities: Record<PatientPriority, string>;
@@ -403,6 +417,13 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       mapPressure: 'Pressure',
       mapRevenue: 'Revenue',
       mapUrgency: 'Urgency',
+      incident: 'Live Incident',
+      incidentReward: 'Reward',
+      incidentPenalty: 'Penalty',
+      temperament: 'Temperament',
+      story: 'Story',
+      expand: 'Expand',
+      collapse: 'Collapse',
     },
     tutorial: {
       title: 'Grow your pet hospital',
@@ -560,6 +581,9 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       mapUnlocked: (map) => `${map} unlocked. Open the Chapter Map to start a tougher branch.`,
       mapSelected: (map) => `${map} selected. A fresh run has started on this map.`,
       mapLocked: (wave) => `Complete chapter ${wave} goals to unlock this map.`,
+      incidentStarted: (incident) => `${incident} started. Adapt the clinic plan fast.`,
+      incidentComplete: (incident, money, score) => `${incident} resolved. Bonus: $${money} and +${score} score.`,
+      incidentFailed: (incident, reputation) => `${incident} slipped away. Reputation -${reputation}.`,
     },
     fx: {
       roomBuilt: '+ room',
@@ -581,6 +605,8 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       contract: 'contract',
       hospitalLevel: 'clinic up',
       mapUnlocked: 'map open',
+      incident: 'incident',
+      incidentMissed: 'missed',
       roomLevel: (level) => `Lv ${level}`,
     },
     objectives: {
@@ -620,6 +646,30 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
         }
         return `Hire ${objective.target} staff`;
       },
+    },
+    incidents: {
+      rescueRush: {
+        title: 'Rescue Rush',
+        description: 'Treat urgent rescue pets before the timer expires.',
+      },
+      vipInspection: {
+        title: 'VIP Inspection',
+        description: 'Deliver excellent high-star care while premium visitors watch.',
+      },
+      equipmentFault: {
+        title: 'Equipment Fault',
+        description: 'Clean and reset treatment rooms before small problems spread.',
+      },
+      comfortVisit: {
+        title: 'Comfort Visit',
+        description: 'Raise waiting comfort and use gentle care policies for anxious pets.',
+      },
+    },
+    temperaments: {
+      brave: 'Brave',
+      shy: 'Shy',
+      playful: 'Playful',
+      fussy: 'Fussy',
     },
     contracts: {
       rushCare: {
@@ -822,6 +872,13 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       mapPressure: '压力',
       mapRevenue: '收益',
       mapUrgency: '急诊',
+      incident: '即时事件',
+      incidentReward: '奖励',
+      incidentPenalty: '惩罚',
+      temperament: '性格',
+      story: '小故事',
+      expand: '展开',
+      collapse: '收起',
     },
     tutorial: {
       title: '扩建你的宠物医院',
@@ -979,6 +1036,9 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       mapUnlocked: (map) => `${map} 已解锁。打开章节地图，挑战更高难度分院。`,
       mapSelected: (map) => `已进入${map}，新一局分院经营开始。`,
       mapLocked: (wave) => `完成第 ${wave} 章目标后解锁此地图。`,
+      incidentStarted: (incident) => `${incident} 开始了，请迅速调整诊所策略。`,
+      incidentComplete: (incident, money, score) => `${incident} 已解决。奖励：$${money} 和 +${score} 积分。`,
+      incidentFailed: (incident, reputation) => `${incident} 未能完成。口碑 -${reputation}。`,
     },
     fx: {
       roomBuilt: '+ 房间',
@@ -1000,6 +1060,8 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
       contract: '合约',
       hospitalLevel: '医院升级',
       mapUnlocked: '新地图',
+      incident: '事件',
+      incidentMissed: '错过',
       roomLevel: (level) => `${level}级`,
     },
     objectives: {
@@ -1039,6 +1101,30 @@ export const TRANSLATIONS: Record<Locale, TranslationBundle> = {
         }
         return `雇佣 ${objective.target} 名员工`;
       },
+    },
+    incidents: {
+      rescueRush: {
+        title: '救援高峰',
+        description: '在倒计时结束前治疗急诊救援宠物。',
+      },
+      vipInspection: {
+        title: '贵宾巡查',
+        description: '在高级访客关注下，提供优秀星级护理。',
+      },
+      equipmentFault: {
+        title: '设备故障',
+        description: '及时清洁并重置诊疗房间，避免小问题扩散。',
+      },
+      comfortVisit: {
+        title: '安抚探访',
+        description: '提升候诊舒适度，并使用温柔护理策略照顾紧张宠物。',
+      },
+    },
+    temperaments: {
+      brave: '勇敢',
+      shy: '胆小',
+      playful: '贪玩',
+      fussy: '挑剔',
     },
     contracts: {
       rushCare: {

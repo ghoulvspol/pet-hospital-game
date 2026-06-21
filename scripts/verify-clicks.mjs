@@ -83,7 +83,28 @@ try {
   assert(renamed.panel.includes('Dr. Clicks'), 'player card shows renamed profile');
   mark('player rename prompt');
 
+  const mapBeforeCollapse = await evaluate(`document.querySelector('[data-section-id="map"] .map-card')?.textContent ?? ''`);
+  assert(mapBeforeCollapse.includes('Garden') || mapBeforeCollapse.includes('花园'), 'chapter map starts expanded');
+  await clickElement(evaluate, click, '[data-action="toggle-hud-section"][data-section="map"]', devtools);
+  let mapCollapsed = await evaluate(`(() => ({
+    collapsed: window.petHospitalTest?.simulation.getState().hudCollapsed.map === true,
+    hidden: !document.querySelector('[data-section-id="map"] .map-card'),
+  }))()`);
+  assert(mapCollapsed.collapsed && mapCollapsed.hidden, 'map section toggle collapses map content');
+  await clickElement(evaluate, click, '[data-action="toggle-hud-section"][data-section="map"]', devtools);
+  mapCollapsed = await evaluate(`(() => ({
+    collapsed: window.petHospitalTest?.simulation.getState().hudCollapsed.map === true,
+    shown: !!document.querySelector('[data-section-id="map"] .map-card'),
+  }))()`);
+  assert(!mapCollapsed.collapsed && mapCollapsed.shown, 'map section toggle expands map content');
+
+  await clickElement(evaluate, click, '[data-action="toggle-hud-section"][data-section="leaderboard"]', devtools);
+  await clickElement(evaluate, click, '[data-action="toggle-hud-section"][data-section="reports"]', devtools);
+  mark('collapsible hud sections');
+
   await prepareScoreScenario(evaluate);
+  await evaluate(`document.querySelector('.left-panel')?.scrollTo({ top: 0 })`);
+  await wait(240);
   await clickElement(evaluate, click, '[data-action="save-score"]', devtools);
   const savedScore = await evaluate(`(() => {
     const state = window.petHospitalTest?.simulation.getState();
@@ -110,6 +131,16 @@ try {
   assert(clearedBoard.count === 0, 'clear leaderboard click clears local leaderboard state');
   assert(clearedBoard.panel.includes('Save') || clearedBoard.panel.includes('保存'), 'cleared leaderboard shows empty state');
   mark('clear leaderboard');
+
+  await prepareIncidentScenario(evaluate);
+  const incidentHud = await evaluate(`(() => ({
+    activeKind: window.petHospitalTest?.simulation.getState().activeIncident?.kind ?? '',
+    card: document.querySelector('.incident-card')?.textContent ?? '',
+  }))()`);
+  assert(incidentHud.activeKind === 'rescueRush', 'incident scenario creates an active rescue incident');
+  assert(incidentHud.card.includes('Rescue') || incidentHud.card.includes('救援'), 'incident card renders event title');
+  assert(incidentHud.card.includes('1/2'), 'incident card renders progress target');
+  mark('live incident hud');
 
   const initialLevelCard = await evaluate(`document.querySelector('.level-card')?.textContent ?? ''`);
   assert(initialLevelCard.includes('1'), 'hospital level card renders the starting level');
@@ -254,6 +285,8 @@ try {
   assert(afterUpgrade.money !== afterClean.money || afterUpgrade.log.includes('升级') || afterUpgrade.log.includes('upgraded'), 'upgrade click updates money or records upgrade reward');
   mark('room upgrade');
 
+  await expandHudSection(evaluate, click, devtools, 'staff');
+
   await clickElement(evaluate, click, '[data-action="rest-staff"][data-staff-id="staff-1"]', devtools);
   const restLog = await evaluate(`document.querySelector('.event-feed')?.textContent ?? ''`);
   assert(restLog.includes('rest') || restLog.includes('休息室'), 'rest staff button records a rest action');
@@ -365,6 +398,8 @@ try {
   assert(afterPatientCanvasClick.rooms === beforePatientCanvasClick.rooms, 'canvas patient click does not build a room');
   assert(afterPatientCanvasClick.inspectedPatientId === 'test-triage', 'canvas patient click selects the patient in simulation state');
   assert(afterPatientCanvasClick.panel.includes('Biscuit') && (afterPatientCanvasClick.panel.includes('优先级') || afterPatientCanvasClick.panel.includes('Priority')), 'canvas patient click opens patient inspector');
+  assert(afterPatientCanvasClick.panel.includes('Shy') || afterPatientCanvasClick.panel.includes('胆小'), 'patient inspector shows temperament');
+  assert(afterPatientCanvasClick.panel.includes('gentle') || afterPatientCanvasClick.panel.includes('小故事'), 'patient inspector shows story hook');
   mark('canvas patient inspection');
 
   await clickElement(evaluate, click, '.queue-triage[data-action="prioritize-patient"]', devtools);
@@ -454,6 +489,13 @@ async function prepareDirtyRoomScenario(evaluate) {
   assert(prepared, 'test mode exposes simulation for dirty room scenario');
 }
 
+async function expandHudSection(evaluate, click, devtools, section) {
+  const collapsed = await evaluate(`Boolean(window.petHospitalTest?.simulation.getState().hudCollapsed[${JSON.stringify(section)}])`);
+  if (collapsed) {
+    await clickElement(evaluate, click, `[data-action="toggle-hud-section"][data-section="${section}"]`, devtools);
+  }
+}
+
 async function prepareStaffTrainingScenario(evaluate) {
   const prepared = await evaluate(`(() => {
     const simulation = window.petHospitalTest?.simulation;
@@ -487,6 +529,8 @@ async function prepareTriagePatientScenario(evaluate) {
         id,
         name,
         petKind: 'cat',
+        temperament: 'shy',
+        story: 'needs a gentle first visit',
         priority: 'normal',
         illnessId: 'wellness-check',
         requiredRoom: 'exam',
@@ -518,6 +562,8 @@ async function prepareSoothePatientScenario(evaluate) {
       id: 'test-soothe',
       name: 'Mochi',
       petKind: 'dog',
+      temperament: 'playful',
+      story: 'wants a sticker after care',
       priority: 'normal',
       illnessId: 'wellness-check',
       requiredRoom: 'exam',
@@ -582,6 +628,32 @@ async function prepareContractCompletionScenario(evaluate) {
     return true;
   })()`);
   assert(prepared, 'test mode exposes simulation for contract completion scenario');
+}
+
+async function prepareIncidentScenario(evaluate) {
+  const prepared = await evaluate(`(() => {
+    const simulation = window.petHospitalTest?.simulation;
+    if (!simulation) return false;
+    const state = simulation.getState();
+    state.paused = true;
+    state.activeIncident = {
+      id: 9001,
+      kind: 'rescueRush',
+      title: state.locale === 'zh' ? '救援高峰' : 'Rescue Rush',
+      description: state.locale === 'zh' ? '治疗急诊救援宠物。' : 'Treat urgent rescue pets.',
+      remainingSeconds: 42,
+      progress: 1,
+      target: 2,
+      rewardMoney: 240,
+      rewardReputation: 4,
+      rewardScore: 700,
+      penaltyReputation: 7,
+      completed: false,
+    };
+    simulation.dispatch({ type: 'setPaused', paused: true });
+    return true;
+  })()`);
+  assert(prepared, 'test mode exposes simulation for incident scenario');
 }
 
 async function prepareMapSelectionScenario(evaluate) {

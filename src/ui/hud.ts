@@ -1,6 +1,6 @@
 import { ILLNESSES, MAP_DEFINITIONS, MAP_ORDER, MAX_ROOM_LEVEL, ROOM_DEFINITIONS, SKILL_DEFINITIONS, SKILL_ORDER } from '../game/simulation/content';
 import { DIFFICULTY_DEFINITIONS, getContractTitle, getIllness, getMapText, getRoomUpgradeCost, getSkillRank, getStaffXpForNextLevel, getWaitingComfortUpgradeCost, type HospitalSimulation } from '../game/simulation/hospitalSimulation';
-import type { CarePolicy, DailyReport, DifficultyId, GameState, HospitalObjective, Locale, MapId, PatientState, RoomKind, RoomState, SkillId, StaffState, TreatmentReport } from '../game/simulation/types';
+import type { CarePolicy, DailyReport, DifficultyId, GameState, HospitalObjective, HudSectionId, Locale, MapId, PatientState, RoomKind, RoomState, SkillId, StaffState, TreatmentReport } from '../game/simulation/types';
 import { getIllnessTitle, getObjectiveTitle, getRoomText, getSkillText, getTranslations } from '../i18n/translations';
 
 export class HospitalHud {
@@ -249,6 +249,14 @@ export class HospitalHud {
       return;
     }
 
+    if (actionName === 'toggle-hud-section') {
+      const section = action.dataset.section as HudSectionId | undefined;
+      if (section) {
+        this.simulation.dispatch({ type: 'toggleHudSection', section });
+      }
+      return;
+    }
+
     if (actionName === 'rename-player') {
       const name = window.prompt(getTranslations(this.state.locale).hud.player, this.state.player.name);
       if (name !== null) {
@@ -406,6 +414,7 @@ export class HospitalHud {
       action.dataset.speed ?? '',
       action.dataset.policy ?? '',
       action.dataset.skillId ?? '',
+      action.dataset.section ?? '',
     ].join('|');
   }
 
@@ -463,9 +472,10 @@ export class HospitalHud {
           ${this.renderPressureMeter()}
           ${this.renderPlayerProgress()}
           ${this.renderHospitalLevel()}
-          ${this.renderChapterMap()}
+          ${this.renderIncident()}
+          ${this.renderCollapsibleSection('map', text.hud.mapChapter, this.renderChapterMap())}
           ${this.renderDifficultyControls()}
-          ${this.renderLeaderboard()}
+          ${this.renderCollapsibleSection('leaderboard', text.hud.leaderboard, this.renderLeaderboard(), `${this.state.leaderboard.length}`)}
           ${this.renderOperationsWatch()}
           ${this.renderCoachTip()}
           ${this.renderArrivalMeter()}
@@ -480,15 +490,14 @@ export class HospitalHud {
           <div class="objective-list">
             ${this.renderObjectives()}
           </div>
-          ${this.renderContracts()}
-          <div class="panel-heading compact staff-heading">
-            <span>${text.hud.staff}</span>
-            <button class="mini-button" data-action="hire-staff">${text.actions.hire} $${this.hireCost()}</button>
-          </div>
-              <div class="staff-list">
-                ${this.renderStaff()}
-              </div>
-              ${this.renderDailySummary()}
+          ${this.renderCollapsibleSection('contracts', text.hud.contracts, this.renderContracts(), `${this.state.contracts.filter((contract) => contract.active && !contract.completed).length}/${this.state.contracts.length}`)}
+          ${this.renderCollapsibleSection(
+            'staff',
+            text.hud.staff,
+            `<div class="staff-list">${this.renderStaff()}</div>`,
+            `<button class="mini-button" data-action="hire-staff">${text.actions.hire} $${this.hireCost()}</button>`,
+          )}
+          ${this.renderCollapsibleSection('reports', text.hud.dailySummary, this.renderDailySummary(), `${this.state.dailyReports.length}`)}
             </aside>
 
         <aside class="right-panel glass-panel">
@@ -586,6 +595,48 @@ export class HospitalHud {
     `;
   }
 
+  private renderCollapsibleSection(section: HudSectionId, title: string, content: string, meta = ''): string {
+    const text = getTranslations(this.state.locale);
+    const collapsed = Boolean(this.state.hudCollapsed[section]);
+    const actionLabel = collapsed ? text.hud.expand : text.hud.collapse;
+    return `
+      <section class="hud-section ${collapsed ? 'collapsed' : 'expanded'}" data-section-id="${section}">
+        <div class="panel-heading compact collapsible-heading">
+          <span>${title}</span>
+          <button class="mini-button section-toggle" data-action="toggle-hud-section" data-section="${section}" aria-expanded="${collapsed ? 'false' : 'true'}">
+            ${meta ? `<b>${meta}</b>` : ''}<em>${actionLabel}</em>
+          </button>
+        </div>
+        ${collapsed ? '' : `<div class="hud-section-body">${content}</div>`}
+      </section>
+    `;
+  }
+
+  private renderIncident(): string {
+    const text = getTranslations(this.state.locale);
+    const incident = this.state.activeIncident;
+    if (!incident) {
+      return '';
+    }
+
+    const ratio = Math.min(1, incident.progress / incident.target);
+    const progress = `${Math.min(incident.progress, incident.target)}/${incident.target}`;
+    return `
+      <div class="incident-card ${incident.kind}" data-incident-kind="${incident.kind}">
+        <div>
+          <em>${text.hud.incident} · ${Math.ceil(incident.remainingSeconds)}s</em>
+          <strong>${incident.title}</strong>
+          <small>${incident.description}</small>
+        </div>
+        <div class="incident-meter">
+          <span>${text.hud.progress} ${progress}</span>
+          <i style="--progress:${Math.round(ratio * 100)}%"></i>
+        </div>
+        <small>${text.hud.incidentReward}: $${incident.rewardMoney} · +${incident.rewardScore} ${text.hud.score} · ${text.hud.incidentPenalty}: -${incident.penaltyReputation}% ${text.hud.reputationShort}</small>
+      </div>
+    `;
+  }
+
   private renderQueue(): string {
     const text = getTranslations(this.state.locale);
     if (this.state.patients.length === 0) {
@@ -603,7 +654,7 @@ export class HospitalHud {
             <span class="pet-avatar pet-token ${patient.petKind}">${this.petShortCode(patient)}</span>
             <span class="queue-copy">
               <strong>${patient.triageBoost ? '★ ' : ''}${patient.name} · ${text.priorities[patient.priority]}</strong>
-              <small>${getIllnessTitle(illness, this.state.locale)} · ${this.statusLabel(patient.status)}</small>
+              <small>${getIllnessTitle(illness, this.state.locale)} · ${text.temperaments[patient.temperament]} · ${this.statusLabel(patient.status)}</small>
               <span class="tiny-meter"><i style="width:${patience}%"></i></span>
             </span>
             ${canPrioritize ? `<span class="queue-triage" data-action="prioritize-patient" data-patient-id="${patient.id}">${text.actions.prioritizePatient}</span>` : ''}
@@ -991,6 +1042,7 @@ export class HospitalHud {
         <span>
           <strong>${'★'.repeat(report.stars)} ${report.patientName} · ${text.grades[report.grade]}</strong>
           <small>${room} · ${text.carePolicies[report.carePolicy].shortTitle} · ${text.hud.careStreak} ×${report.streak}</small>
+          <small>${text.temperaments[report.temperament]} · ${report.story}</small>
           <span class="care-economy">
             <b>$${report.revenue}</b>
             <em>${text.hud.bonus} ${report.bonus >= 0 ? '+' : ''}$${report.bonus}</em>
@@ -1063,10 +1115,15 @@ export class HospitalHud {
           <dl class="detail-grid">
             <div><dt>${text.hud.status}</dt><dd>${this.statusLabel(patient.status)}</dd></div>
             <div><dt>${text.hud.priority}</dt><dd>${text.priorities[patient.priority]}</dd></div>
+            <div><dt>${text.hud.temperament}</dt><dd>${text.temperaments[patient.temperament]}</dd></div>
             <div><dt>${text.hud.patience}</dt><dd>${Math.round((patient.patience / patient.maxPatience) * 100)}%</dd></div>
             <div><dt>${text.hud.routeSteps}</dt><dd>${patient.path.length}</dd></div>
             <div><dt>${text.hud.room}</dt><dd>${getRoomText({ kind: patient.requiredRoom }, this.state.locale).shortTitle}</dd></div>
           </dl>
+          <div class="pet-story-card">
+            <strong>${text.hud.story}</strong>
+            <small>${patient.story}</small>
+          </div>
           <button class="wide-action secondary" data-action="soothe-patient" data-patient-id="${patient.id}" ${sootheDisabled ? 'disabled' : ''}>
             <span>${text.actions.soothePatient} · $32</span>
             ${sootheDisabled ? `<small>${sootheReason}</small>` : ''}

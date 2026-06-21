@@ -63,6 +63,10 @@ try {
     for (let step = 0; step < 260; step += 1) {
       simulation.update(0.75);
     }
+    const state = simulation.getState();
+    if (state.hudCollapsed.reports) {
+      simulation.dispatch({ type: 'toggleHudSection', section: 'reports' });
+    }
   })()`);
   await wait(800);
 

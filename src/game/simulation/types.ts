@@ -28,6 +28,12 @@ export type DifficultyId = 'cozy' | 'classic' | 'expert';
 
 export type MapId = 'gardenClinic' | 'downtownRescue' | 'beachsideSpa' | 'mountainEmergency';
 
+export type PetTemperament = 'brave' | 'shy' | 'playful' | 'fussy';
+
+export type HospitalIncidentKind = 'rescueRush' | 'vipInspection' | 'equipmentFault' | 'comfortVisit';
+
+export type HudSectionId = 'map' | 'leaderboard' | 'contracts' | 'staff' | 'reports';
+
 export interface RoomDefinition {
   kind: RoomKind;
   title: string;
@@ -97,6 +103,8 @@ export interface PatientState {
   id: string;
   name: string;
   petKind: PetKind;
+  temperament: PetTemperament;
+  story: string;
   priority: PatientPriority;
   illnessId: string;
   requiredRoom: RoomKind;
@@ -112,6 +120,21 @@ export interface PatientState {
   treatmentRemaining: number;
   triageBoost: boolean;
   assignedRoomId?: string;
+}
+
+export interface HospitalIncidentState {
+  id: number;
+  kind: HospitalIncidentKind;
+  title: string;
+  description: string;
+  remainingSeconds: number;
+  progress: number;
+  target: number;
+  rewardMoney: number;
+  rewardReputation: number;
+  rewardScore: number;
+  penaltyReputation: number;
+  completed: boolean;
 }
 
 export interface HospitalEvent {
@@ -260,6 +283,8 @@ export interface TreatmentReport {
   id: number;
   patientName: string;
   petKind: PetKind;
+  temperament: PetTemperament;
+  story: string;
   roomKind: RoomKind;
   grade: TreatmentGrade;
   score: number;
@@ -300,6 +325,9 @@ export interface GameState {
   dailyReports: DailyReport[];
   facilities: FacilityState;
   metrics: HospitalMetrics;
+  activeIncident?: HospitalIncidentState;
+  incidentTimer: number;
+  hudCollapsed: Partial<Record<HudSectionId, boolean>>;
   queuePressure: number;
   rushTimer: number;
   rushActiveSeconds: number;
@@ -333,6 +361,7 @@ export type HospitalAction =
   | { type: 'setLocale'; locale: Locale }
   | { type: 'setDifficulty'; difficulty: DifficultyId }
   | { type: 'selectMap'; mapId: MapId }
+  | { type: 'toggleHudSection'; section: HudSectionId }
   | { type: 'setPlayerName'; name: string }
   | { type: 'saveScore' }
   | { type: 'clearLeaderboard' }

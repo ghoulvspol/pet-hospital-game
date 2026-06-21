@@ -11,7 +11,10 @@ import type {
   HospitalContract,
   HospitalEvent,
   HospitalFxKind,
+  HospitalIncidentKind,
+  HospitalIncidentState,
   HospitalObjective,
+  HudSectionId,
   IllnessDefinition,
   Locale,
   MapDefinition,
@@ -25,6 +28,7 @@ import type {
   StaffRole,
   StaffState,
   PatientPriority,
+  PetTemperament,
   TreatmentGrade,
   ContractKind,
 } from './types';
@@ -39,6 +43,17 @@ const STAFF_REST_ENERGY_TARGET = 82;
 const SOOTHE_COST = 32;
 const MAX_WAITING_COMFORT_LEVEL = 3;
 const MAX_ACTIVE_CONTRACTS = 2;
+
+const TEMPERAMENTS: PetTemperament[] = ['brave', 'shy', 'playful', 'fussy'];
+
+const PET_STORY_HOOKS: Record<PetTemperament, string[]> = {
+  brave: ['rescued from a storm drain', 'protecting a nervous sibling', 'ready for any treatment'],
+  shy: ['hiding behind their owner', 'needs a gentle first visit', 'calms down around quiet rooms'],
+  playful: ['chasing every squeaky toy', 'turning check-in into a game', 'wants a sticker after care'],
+  fussy: ['only trusts premium treats', 'complaining about every thermometer', 'expects spotless rooms'],
+};
+
+const INCIDENT_SEQUENCE: HospitalIncidentKind[] = ['rescueRush', 'vipInspection', 'equipmentFault', 'comfortVisit'];
 
 export const DIFFICULTY_DEFINITIONS: Record<DifficultyId, DifficultyDefinition> = {
   cozy: {
@@ -131,6 +146,12 @@ export class HospitalSimulation extends EventTarget {
 
     if (action.type === 'selectMap') {
       this.selectMap(action.mapId);
+      this.emit();
+      return;
+    }
+
+    if (action.type === 'toggleHudSection') {
+      this.toggleHudSection(action.section);
       this.emit();
       return;
     }
@@ -298,6 +319,10 @@ export class HospitalSimulation extends EventTarget {
     this.pushEvent(getTranslations(this.state.locale).events.mapSelected(getMapTitle(mapId, this.state.locale)), 'good');
   }
 
+  private toggleHudSection(section: HudSectionId): void {
+    this.state.hudCollapsed[section] = !this.state.hudCollapsed[section];
+  }
+
   private saveScore(): void {
     const score = Math.round(this.state.metrics.score);
     if (score <= 0) {
@@ -349,6 +374,7 @@ export class HospitalSimulation extends EventTarget {
 
     const scaledDelta = deltaSeconds * this.state.speed;
     this.updatePressureAndRush(scaledDelta);
+    this.updateIncident(scaledDelta);
     this.state.clock += scaledDelta;
     if (this.state.clock >= 100) {
       this.recordDailyReport();
@@ -663,12 +689,15 @@ export class HospitalSimulation extends EventTarget {
     const illness = pick(illnessPool);
     const waitingSpot = activeMap.waitingSpots[this.state.patients.length % activeMap.waitingSpots.length];
     const petKind = pick(PET_KINDS);
+    const temperament = pick(TEMPERAMENTS);
     const priority = rollPatientPriority(this.state.reputation, this.state.rushActiveSeconds > 0, activeMap.urgentBias);
-    const patienceSeconds = Math.max(11, illness.patienceSeconds * getPriorityPatienceMultiplier(priority) * getDifficulty(this.state).patienceMultiplier * activeMap.patienceMultiplier);
+    const patienceSeconds = Math.max(11, illness.patienceSeconds * getPriorityPatienceMultiplier(priority) * getTemperamentPatienceMultiplier(temperament) * getDifficulty(this.state).patienceMultiplier * activeMap.patienceMultiplier);
     const patient: PatientState = {
       id: `patient-${this.state.nextPatientId++}`,
       name: pick(PET_NAMES),
       petKind,
+      temperament,
+      story: pick(PET_STORY_HOOKS[temperament]),
       priority,
       illnessId: illness.id,
       requiredRoom: illness.requiredRoom,
@@ -804,9 +833,10 @@ export class HospitalSimulation extends EventTarget {
 
       if (patient.treatmentRemaining <= 0) {
         const illness = ILLNESSES.find((candidate) => candidate.id === patient.illnessId);
-        const quality = calculateTreatmentQuality(patient, room, staff, this.state.difficulty);
+        const quality = calculateTreatmentQuality(patient, room, staff, this.state);
         const activeMap = getActiveMap(this.state);
-        const baseRevenue = Math.round(((illness?.value ?? 60) + definition.revenueBonus + this.state.reputation * 0.25 + (room.level - 1) * 24 + sparkleCare * 12) * getPriorityRevenueMultiplier(patient.priority) * activeMap.revenueMultiplier);
+        const layoutBonus = getRoomAdjacencyBonus(this.state, room);
+        const baseRevenue = Math.round(((illness?.value ?? 60) + definition.revenueBonus + this.state.reputation * 0.25 + (room.level - 1) * 24 + sparkleCare * 12 + layoutBonus.revenueBonus) * getPriorityRevenueMultiplier(patient.priority) * activeMap.revenueMultiplier);
         const stars = getTreatmentStars(quality.score);
         const streak = quality.grade === 'rough' ? 0 : this.state.metrics.careStreak + 1;
         const streakBonus = getCareStreakBonus(baseRevenue, streak);
@@ -869,6 +899,8 @@ export class HospitalSimulation extends EventTarget {
       id: this.state.nextEventId++,
       patientName: patient.name,
       petKind: patient.petKind,
+      temperament: patient.temperament,
+      story: patient.story,
       roomKind: room.kind,
       grade,
       score,
@@ -931,6 +963,60 @@ export class HospitalSimulation extends EventTarget {
       this.pushFx('warning', 4, 4, getTranslations(this.state.locale).fx.rush);
       this.pushEvent(getTranslations(this.state.locale).events.rushStarted, 'warning');
     }
+  }
+
+  private updateIncident(deltaSeconds: number): void {
+    if (this.state.activeIncident) {
+      const incident = this.state.activeIncident;
+      incident.remainingSeconds = Math.max(0, incident.remainingSeconds - deltaSeconds);
+      incident.progress = getIncidentProgress(this.state, incident);
+      if (incident.progress >= incident.target) {
+        this.completeIncident(incident);
+        return;
+      }
+      if (incident.remainingSeconds <= 0) {
+        this.failIncident(incident);
+      }
+      return;
+    }
+
+    this.state.incidentTimer -= deltaSeconds;
+    if (this.state.incidentTimer <= 0 && (this.state.day >= 2 || this.state.metrics.totalTreated >= 4)) {
+      this.startIncident();
+    }
+  }
+
+  private startIncident(): void {
+    const kind = INCIDENT_SEQUENCE[(this.state.day + this.state.objectiveWave + this.state.completedContracts) % INCIDENT_SEQUENCE.length];
+    const incident = createIncident(this.state, kind);
+    this.state.activeIncident = incident;
+    this.state.incidentTimer = 999;
+    this.pushFx('warning', 4.5, 3.5, getTranslations(this.state.locale).fx.incident);
+    this.pushEvent(getTranslations(this.state.locale).events.incidentStarted(incident.title), kind === 'comfortVisit' ? 'neutral' : 'warning');
+  }
+
+  private completeIncident(incident: HospitalIncidentState): void {
+    incident.completed = true;
+    incident.progress = incident.target;
+    this.state.money += incident.rewardMoney;
+    this.state.reputation = clamp(this.state.reputation + incident.rewardReputation, 0, 100);
+    this.state.metrics.score += incident.rewardScore;
+    this.awardHospitalXp(90 + incident.rewardScore / 6);
+    this.pushFx('upgrade', 6.5, 2.7, `+${incident.rewardScore}`);
+    this.pushEvent(getTranslations(this.state.locale).events.incidentComplete(incident.title, incident.rewardMoney, incident.rewardScore), 'good');
+    this.state.activeIncident = undefined;
+    this.state.incidentTimer = getNextIncidentDelay(this.state);
+    this.updateObjectiveProgress();
+  }
+
+  private failIncident(incident: HospitalIncidentState): void {
+    this.state.reputation = clamp(this.state.reputation - incident.penaltyReputation, 0, 100);
+    this.state.metrics.careStreak = 0;
+    this.pushFx('warning', 5.2, 3.2, getTranslations(this.state.locale).fx.incidentMissed);
+    this.pushEvent(getTranslations(this.state.locale).events.incidentFailed(incident.title, incident.penaltyReputation), 'warning');
+    this.state.activeIncident = undefined;
+    this.state.incidentTimer = getNextIncidentDelay(this.state) * 0.8;
+    this.updateObjectiveProgress();
   }
 
   private getNextSpawnDelay(): number {
@@ -1190,6 +1276,11 @@ export function createInitialState(
     dailyReports: [],
     facilities: {
       waitingComfortLevel: 0,
+    },
+    incidentTimer: 18,
+    hudCollapsed: {
+      leaderboard: true,
+      reports: true,
     },
     queuePressure: 0,
     rushTimer: 26,
@@ -1650,6 +1741,48 @@ function getContractProgress(state: GameState, contract: HospitalContract): numb
   return state.staff.reduce((total, staff) => total + Object.values(staff.skills).reduce((sum, rank) => sum + (rank ?? 0), 0), 0);
 }
 
+function createIncident(state: GameState, kind: HospitalIncidentKind): HospitalIncidentState {
+  const scale = Math.max(1, state.objectiveWave + Math.floor(state.day / 2));
+  const text = getTranslations(state.locale).incidents[kind];
+  const base = {
+    id: state.nextEventId++,
+    kind,
+    title: text.title,
+    description: text.description,
+    progress: 0,
+    completed: false,
+  };
+
+  if (kind === 'rescueRush') {
+    return { ...base, remainingSeconds: 58, target: Math.max(2, Math.ceil(scale / 2)), rewardMoney: 220 + scale * 42, rewardReputation: 4, rewardScore: 620 + scale * 90, penaltyReputation: 7 };
+  }
+  if (kind === 'vipInspection') {
+    return { ...base, remainingSeconds: 72, target: Math.max(1, Math.ceil(scale / 3)), rewardMoney: 260 + scale * 48, rewardReputation: 5, rewardScore: 700 + scale * 110, penaltyReputation: 8 };
+  }
+  if (kind === 'equipmentFault') {
+    return { ...base, remainingSeconds: 62, target: Math.min(3, Math.max(1, Math.floor(state.rooms.length / 2))), rewardMoney: 180 + scale * 36, rewardReputation: 3, rewardScore: 540 + scale * 78, penaltyReputation: 6 };
+  }
+  return { ...base, remainingSeconds: 70, target: Math.min(3, Math.max(1, state.facilities.waitingComfortLevel + 1)), rewardMoney: 190 + scale * 38, rewardReputation: 4, rewardScore: 560 + scale * 82, penaltyReputation: 5 };
+}
+
+function getIncidentProgress(state: GameState, incident: HospitalIncidentState): number {
+  if (incident.kind === 'rescueRush') {
+    return state.metrics.urgentTreated;
+  }
+  if (incident.kind === 'vipInspection') {
+    return state.treatmentReports.filter((report) => report.grade === 'excellent' && report.stars >= 4).length;
+  }
+  if (incident.kind === 'equipmentFault') {
+    return state.rooms.filter((room) => room.cleanliness >= 92 && room.cleaningCooldown > 0).length;
+  }
+  return state.facilities.waitingComfortLevel + state.rooms.filter((room) => room.carePolicy === 'comfort').length;
+}
+
+function getNextIncidentDelay(state: GameState): number {
+  const mapPressure = getActiveMap(state).pressureMultiplier;
+  return Math.max(38, 86 - state.objectiveWave * 4 - state.day * 1.6) / mapPressure;
+}
+
 function getHospitalXpForNextLevel(level: number): number {
   return 520 + level * 260;
 }
@@ -1671,14 +1804,17 @@ export function getContractTitle(kind: ContractKind, locale: Locale): string {
   return getTranslations(locale).contracts[kind].title;
 }
 
-function calculateTreatmentQuality(patient: PatientState, room: RoomState, staff: StaffState | undefined, difficulty: DifficultyId): { grade: TreatmentGrade; score: number; bonusRate: number; reputationDelta: number } {
+function calculateTreatmentQuality(patient: PatientState, room: RoomState, staff: StaffState | undefined, state: GameState): { grade: TreatmentGrade; score: number; bonusRate: number; reputationDelta: number } {
   const patienceRatio = clamp(patient.patience / patient.maxPatience, 0, 1);
   const staffEnergy = staff ? staff.energy / 100 : 0.42;
   const cleanliness = room.cleanliness / 100;
   const levelBoost = (room.level - 1) * 0.08;
   const policy = getCarePolicyEffect(room.carePolicy);
+  const temperament = getTemperamentQualityEffect(patient.temperament, room.carePolicy);
+  const layoutBonus = getRoomAdjacencyBonus(state, room).qualityBonus;
+  const difficulty = state.difficulty;
   const difficultyPenalty = difficulty === 'expert' ? -6 : difficulty === 'cozy' ? 4 : 0;
-  const score = Math.round(clamp(42 + patienceRatio * 25 + cleanliness * 20 + staffEnergy * 16 + levelBoost * 100 + policy.qualityBonus + difficultyPenalty, 0, 100));
+  const score = Math.round(clamp(42 + patienceRatio * 25 + cleanliness * 20 + staffEnergy * 16 + levelBoost * 100 + policy.qualityBonus + temperament + layoutBonus + difficultyPenalty, 0, 100));
 
   if (score >= 82) {
     return { grade: 'excellent', score, bonusRate: 0.16, reputationDelta: 4.2 };
@@ -1748,6 +1884,100 @@ function getCarePolicyEffect(policy: CarePolicy): { speedMultiplier: number; cle
     patienceRecovery: 0.08,
     qualityBonus: 0,
   };
+}
+
+function getTemperamentPatienceMultiplier(temperament: PetTemperament): number {
+  if (temperament === 'brave') {
+    return 1.06;
+  }
+  if (temperament === 'playful') {
+    return 1;
+  }
+  if (temperament === 'shy') {
+    return 0.92;
+  }
+  return 0.88;
+}
+
+function getTemperamentQualityEffect(temperament: PetTemperament, policy: CarePolicy): number {
+  if (temperament === 'shy') {
+    return policy === 'comfort' ? 7 : policy === 'express' ? -7 : -2;
+  }
+  if (temperament === 'playful') {
+    return policy === 'express' ? 4 : policy === 'comfort' ? 1 : 2;
+  }
+  if (temperament === 'fussy') {
+    return policy === 'comfort' ? 4 : policy === 'express' ? -6 : -3;
+  }
+  return policy === 'express' ? 1 : 2;
+}
+
+function getRoomAdjacencyBonus(state: GameState, room: RoomState): { qualityBonus: number; revenueBonus: number } {
+  const adjacentKinds = state.rooms
+    .filter((candidate) => candidate.id !== room.id && areRoomsAdjacent(room, candidate))
+    .map((candidate) => candidate.kind);
+  const uniqueKinds = new Set(adjacentKinds);
+  let qualityBonus = 0;
+  let revenueBonus = 0;
+
+  if (room.kind === 'exam') {
+    if (uniqueKinds.has('lab')) {
+      qualityBonus += 3;
+      revenueBonus += 8;
+    }
+    if (uniqueKinds.has('recovery')) {
+      qualityBonus += 2;
+      revenueBonus += 5;
+    }
+  }
+
+  if (room.kind === 'lab') {
+    if (uniqueKinds.has('exam')) {
+      qualityBonus += 3;
+      revenueBonus += 7;
+    }
+    if (uniqueKinds.has('recovery')) {
+      qualityBonus += 2;
+      revenueBonus += 4;
+    }
+  }
+
+  if (room.kind === 'grooming' && uniqueKinds.has('recovery')) {
+    qualityBonus += 3;
+    revenueBonus += 7;
+  }
+
+  if (room.kind === 'recovery') {
+    if (uniqueKinds.has('exam')) {
+      qualityBonus += 2;
+      revenueBonus += 5;
+    }
+    if (uniqueKinds.has('grooming')) {
+      qualityBonus += 3;
+      revenueBonus += 6;
+    }
+    if (uniqueKinds.has('lab')) {
+      qualityBonus += 2;
+      revenueBonus += 4;
+    }
+  }
+
+  return {
+    qualityBonus: Math.min(7, qualityBonus),
+    revenueBonus: Math.min(18, revenueBonus),
+  };
+}
+
+function areRoomsAdjacent(first: RoomState, second: RoomState): boolean {
+  const firstRight = first.gridX + first.width;
+  const secondRight = second.gridX + second.width;
+  const firstBottom = first.gridY + first.height;
+  const secondBottom = second.gridY + second.height;
+  const verticalOverlap = first.gridY < secondBottom && second.gridY < firstBottom;
+  const horizontalOverlap = first.gridX < secondRight && second.gridX < firstRight;
+  const touchesHorizontally = firstRight === second.gridX || secondRight === first.gridX;
+  const touchesVertically = firstBottom === second.gridY || secondBottom === first.gridY;
+  return (touchesHorizontally && verticalOverlap) || (touchesVertically && horizontalOverlap);
 }
 
 function getDifficulty(state: Pick<GameState, 'difficulty'>): DifficultyDefinition {

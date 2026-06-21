@@ -28,12 +28,15 @@ interface RoomViewParts {
 
 interface PatientViewParts {
   shadow: Phaser.GameObjects.Ellipse;
+  aura: Phaser.GameObjects.Ellipse;
   moodRing: Phaser.GameObjects.Ellipse;
+  careHalo: Phaser.GameObjects.Arc;
   sprite: Phaser.GameObjects.Image;
   bubble: Phaser.GameObjects.Container;
   bubbleBack: Phaser.GameObjects.Rectangle;
   mood: Phaser.GameObjects.Text;
   priorityBadge: Phaser.GameObjects.Text;
+  statusBadge: Phaser.GameObjects.Text;
   bubbleText: Phaser.GameObjects.Text;
   patienceBack: Phaser.GameObjects.Rectangle;
   patience: Phaser.GameObjects.Rectangle;
@@ -561,9 +564,11 @@ export class HospitalScene extends Phaser.Scene {
   }
 
   private createPatientView(patient: PatientState): Phaser.GameObjects.Container {
-    const shadow = this.add.ellipse(0, 17, 34, 11, 0x31544e, 0.16).setName('shadow');
+    const shadow = this.add.ellipse(0, 22, 42, 14, 0x31544e, 0.18).setName('shadow');
+    const aura = this.add.ellipse(0, 2, 70, 76, 0x35c986, 0.08).setName('aura');
     const moodRing = this.add.ellipse(0, 2, 58, 62, 0x35c986, 0.12).setName('moodRing');
-    const sprite = this.add.image(0, 0, PET_ASSET_KEYS[patient.petKind]).setDisplaySize(58, 64).setName('sprite');
+    const careHalo = this.add.circle(0, 1, 38, 0xffffff, 0).setStrokeStyle(3, 0x35c986, 0.22).setName('careHalo');
+    const sprite = this.add.image(0, 0, PET_ASSET_KEYS[patient.petKind]).setDisplaySize(66, 72).setName('sprite');
     const mood = this.add.text(-24, -62, '', {
       color: '#16463f',
       fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif',
@@ -578,6 +583,13 @@ export class HospitalScene extends Phaser.Scene {
       backgroundColor: '#31544e',
       padding: { x: 5, y: 2 },
     }).setName('priorityBadge');
+    const statusBadge = this.add.text(-18, 31, '', {
+      color: '#0f6b52',
+      fontFamily: 'Arial Rounded MT Bold, Arial, sans-serif',
+      fontSize: '13px',
+      backgroundColor: 'rgba(255,255,255,0.88)',
+      padding: { x: 5, y: 2 },
+    }).setName('statusBadge');
     const bubbleBack = this.add.rectangle(24, -58, 52, 24, 0xffffff, 0.9).setName('bubbleBack');
     bubbleBack.setStrokeStyle(1, 0x31544e, 0.14);
     const bubbleText = this.add.text(6, -66, '', {
@@ -586,11 +598,11 @@ export class HospitalScene extends Phaser.Scene {
       fontSize: '11px',
     }).setName('bubbleText');
     const bubble = this.add.container(0, 0, [bubbleBack, bubbleText]).setName('bubble');
-    const patienceBack = this.add.rectangle(0, -35, 36, 5, 0xffffff, 0.9).setName('patienceBack');
+    const patienceBack = this.add.rectangle(0, -39, 42, 6, 0xffffff, 0.92).setName('patienceBack');
     patienceBack.setStrokeStyle(1, 0x31544e, 0.25);
-    const patience = this.add.rectangle(-18, -35, 36, 5, 0x35c986, 1).setOrigin(0, 0.5).setName('patience');
-    const container = this.add.container(0, 0, [shadow, moodRing, sprite, mood, priorityBadge, bubble, patienceBack, patience]).setDepth(8);
-    container.setData('parts', { shadow, moodRing, sprite, mood, priorityBadge, bubble, bubbleBack, bubbleText, patienceBack, patience } satisfies PatientViewParts);
+    const patience = this.add.rectangle(-21, -39, 42, 6, 0x35c986, 1).setOrigin(0, 0.5).setName('patience');
+    const container = this.add.container(0, 0, [shadow, aura, moodRing, careHalo, sprite, mood, priorityBadge, statusBadge, bubble, patienceBack, patience]).setDepth(8);
+    container.setData('parts', { shadow, aura, moodRing, careHalo, sprite, mood, priorityBadge, statusBadge, bubble, bubbleBack, bubbleText, patienceBack, patience } satisfies PatientViewParts);
     return container;
   }
 
@@ -603,11 +615,14 @@ export class HospitalScene extends Phaser.Scene {
     const frame = Math.floor(this.time.now / 260) % 2 === 0 ? 0 : 1;
     parts.sprite.setTexture(frame === 0 ? PET_ASSET_KEYS[patient.petKind] : PET_WALK_ASSET_KEYS[patient.petKind]);
     const ratio = Phaser.Math.Clamp(patient.patience / patient.maxPatience, 0, 1);
-    parts.patience.width = 36 * ratio;
+    parts.patience.width = 42 * ratio;
     const moodColor = getPatientMoodColor(patient, ratio);
     parts.patience.fillColor = moodColor;
+    parts.aura.fillColor = moodColor;
+    parts.aura.setAlpha(patient.priority === 'vip' ? 0.16 : patient.priority === 'urgent' ? 0.18 : ratio < 0.55 ? 0.13 : 0.08);
     parts.moodRing.fillColor = moodColor;
     parts.moodRing.setAlpha(patient.status === 'treating' ? 0.2 : ratio < 0.55 ? 0.18 + Math.sin(this.time.now / 140) * 0.04 : 0.11);
+    parts.careHalo.setStrokeStyle(patient.status === 'treating' ? 4 : 2, moodColor, patient.status === 'treating' ? 0.54 : patient.priority === 'urgent' ? 0.38 : 0.18);
     parts.bubbleBack.fillColor = ratio < 0.25 ? 0xffedd5 : ratio < 0.55 ? 0xfff7cd : 0xffffff;
     parts.bubbleBack.setStrokeStyle(1, moodColor, ratio < 0.55 ? 0.38 : 0.18);
     parts.bubble.setVisible(patient.status !== 'treating' && patient.status !== 'leaving');
@@ -616,6 +631,9 @@ export class HospitalScene extends Phaser.Scene {
     parts.priorityBadge.setVisible(patient.priority !== 'normal' || patient.triageBoost);
     parts.priorityBadge.setText(patient.triageBoost ? '★' : patient.priority === 'urgent' ? '!' : 'VIP');
     parts.priorityBadge.setBackgroundColor(patient.triageBoost ? '#8b5cf6' : patient.priority === 'urgent' ? '#ef4444' : '#f59e0b');
+    parts.statusBadge.setText(patient.status === 'treating' ? '✚' : patient.status === 'waiting' ? '⌛' : patient.status === 'toRoom' ? '➜' : patient.status === 'leaving' ? '⌂' : '↧');
+    parts.statusBadge.setBackgroundColor(patient.status === 'treating' ? 'rgba(213,255,236,0.9)' : patient.status === 'leaving' ? 'rgba(255,237,213,0.9)' : 'rgba(255,255,255,0.88)');
+    parts.statusBadge.setColor(patient.status === 'leaving' ? '#8a3b09' : '#0f6b52');
     parts.sprite.setTint(patient.priority === 'urgent' ? 0xfff1f2 : patient.priority === 'vip' ? 0xfffbeb : 0xffffff);
   }
 
@@ -643,10 +661,15 @@ export class HospitalScene extends Phaser.Scene {
       }
 
       const bob = Math.sin(this.time.now / 180 + patient.id.length) * 2.5;
+      const pulse = 1 + Math.sin(this.time.now / 220 + patient.id.length) * 0.035;
       const parts = view.getData('parts') as PatientViewParts;
       parts.sprite.setY(bob);
+      parts.shadow.setScale(1 + Math.abs(bob) * 0.012, 1);
+      parts.aura.setScale(patient.priority === 'vip' ? 1.08 + Math.sin(this.time.now / 260) * 0.04 : pulse);
       parts.moodRing.setY(2 + bob * 0.3);
       parts.moodRing.setScale(patient.status === 'waiting' && patient.patience / patient.maxPatience < 0.35 ? 1 + Math.sin(this.time.now / 120) * 0.05 : 1);
+      parts.careHalo.setScale(patient.status === 'treating' ? 1 + Math.sin(this.time.now / 110) * 0.08 : patient.priority === 'urgent' ? 1.03 + Math.sin(this.time.now / 150) * 0.04 : 1);
+      parts.careHalo.setAngle(this.time.now / 24);
       parts.bubble.setY(Math.sin(this.time.now / 230 + patient.id.length) * 1.2);
       parts.sprite.setFlipX(patient.targetX < patient.x);
     }
